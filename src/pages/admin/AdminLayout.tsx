@@ -186,14 +186,14 @@ export function AdminLayout() {
                   color: '#1f2937', 
                   margin: 0 
                 }}>
-                  Admin Panel
+                  Top Pix Admin
                 </h1>
                 <p style={{ 
                   fontSize: '14px', 
                   color: '#6b7280', 
                   margin: 0 
                 }}>
-                  Sistema de Bilhetes
+                  Plataforma Top Pix
                 </p>
               </div>
             </div>
@@ -305,7 +305,7 @@ export function AdminLayout() {
                 </div>
                 <div>
                   <p style={{ fontWeight: '500', color: '#1f2937', margin: 0 }}>Administrador</p>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>Sistema v1.0</p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>Top Pix v1.0</p>
                 </div>
               </div>
               <div style={{ fontSize: '12px', color: '#6b7280' }}>
@@ -363,7 +363,7 @@ export function AdminLayout() {
                   color: '#1f2937', 
                   margin: 0 
                 }}>
-                  Admin
+                  Top Pix
                 </h1>
               </div>
               <Link

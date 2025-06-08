@@ -280,7 +280,7 @@ export function ListarBilhetes() {
             marginBottom: '16px',
             lineHeight: 1.2
           }}>
-            Bilhetes Gerados
+            Top Pix - Bilhetes
           </h1>
           <p style={{ 
             fontSize: '20px', 
@@ -288,7 +288,7 @@ export function ListarBilhetes() {
             maxWidth: '512px', 
             margin: '0 auto' 
           }}>
-            Visualize, filtre e gerencie todos os bilhetes da sua promoção
+            Visualize, filtre e gerencie todos os bilhetes da plataforma Top Pix
           </p>
         </div>
 

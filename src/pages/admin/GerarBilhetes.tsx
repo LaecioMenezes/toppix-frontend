@@ -26,7 +26,7 @@ export function GerarBilhetes() {
           marginBottom: '24px',
           textAlign: 'center'
         }}>
-          🎫 GERAR BILHETES - DEBUG OK
+          🎫 Top Pix - Gerar Bilhetes
         </h1>
         
         <div style={{ 
