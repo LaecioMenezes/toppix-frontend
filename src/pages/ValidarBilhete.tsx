@@ -34,7 +34,6 @@ export function ValidarBilhete() {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
     reset,
   } = useForm<ValidarBilheteForm>({
     resolver: zodResolver(validarBilheteSchema),

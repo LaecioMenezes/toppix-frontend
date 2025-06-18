@@ -13,13 +13,18 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 // Classe para lidar com erros da API
 class ApiError extends Error {
+  status: number;
+  data?: any;
+
   constructor(
     message: string,
-    public status: number,
-    public data?: any
+    status: number,
+    data?: any
   ) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.data = data;
   }
 }
 
@@ -172,7 +177,7 @@ export const mockBilheteService = {
     };
   },
 
-  async listarBilhetes(filtros?: FiltrosBilhetes): Promise<ApiResponse<Bilhete[]>> {
+  async listarBilhetes(_filtros?: FiltrosBilhetes): Promise<ApiResponse<Bilhete[]>> {
     await new Promise(resolve => setTimeout(resolve, 500));
     
     // Dados mock
