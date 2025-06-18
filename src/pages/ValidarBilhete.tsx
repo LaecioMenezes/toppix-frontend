@@ -16,6 +16,8 @@ export function ValidarBilhete() {
     chavePix: ''
   });
   const [enviandoContato, setEnviandoContato] = useState(false);
+  const [erroFormulario, setErroFormulario] = useState<string | null>(null);
+  const [sucessoResgate, setSucessoResgate] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -66,6 +68,8 @@ export function ValidarBilhete() {
     setResultado(null);
     setCodigo('');
     setMostrarFormularioContato(false);
+    setErroFormulario(null);
+    setSucessoResgate(null);
     setDadosContato({
       nome: '',
       telefone: '',
@@ -76,22 +80,24 @@ export function ValidarBilhete() {
 
   const handleEnviarContato = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErroFormulario(null);
+    setSucessoResgate(null);
     
     // Validações básicas
     if (!dadosContato.nome.trim() || !dadosContato.telefone.trim() || !dadosContato.email.trim() || !dadosContato.chavePix.trim()) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
+      setErroFormulario('Por favor, preencha todos os campos obrigatórios.');
       return;
     }
 
     // Validação específica do telefone
     const telefoneFormatado = dadosContato.telefone.trim();
     if (!telefoneFormatado.match(/^\([0-9]{2}\) [0-9]{4,5}-[0-9]{4}$/)) {
-      alert('Telefone deve estar no formato (XX) XXXXX-XXXX. Digite apenas os números que a formatação será aplicada automaticamente.');
+      setErroFormulario('Telefone deve estar no formato (XX) XXXXX-XXXX. Digite apenas os números que a formatação será aplicada automaticamente.');
       return;
     }
 
     if (!resultado?.bilhete?.codigoUnico) {
-      alert('Erro: código do bilhete não encontrado.');
+      setErroFormulario('Erro: código do bilhete não encontrado.');
       return;
     }
 
@@ -108,7 +114,7 @@ export function ValidarBilhete() {
 
       const response = await bilheteService.processarResgate(dadosResgate);
       
-      alert(`${response.mensagem}\n\nData do resgate: ${new Date(response.dataResgate).toLocaleString('pt-BR')}`);
+      setSucessoResgate(`${response.mensagem}\n\nData do resgate: ${new Date(response.dataResgate).toLocaleString('pt-BR')}`);
       setMostrarFormularioContato(false);
       
       // Atualizar o resultado com o bilhete atualizado
@@ -121,7 +127,7 @@ export function ValidarBilhete() {
       
     } catch (error) {
       const mensagemErro = error instanceof Error ? error.message : 'Erro ao processar resgate. Tente novamente.';
-      alert(mensagemErro);
+      setErroFormulario(mensagemErro);
     } finally {
       setEnviandoContato(false);
     }
@@ -184,24 +190,25 @@ export function ValidarBilhete() {
         {/* Logo e Título */}
         <div style={{ marginBottom: '32px' }}>
           <div style={{
-            width: '80px',
-            height: '80px',
-            background: 'linear-gradient(135deg, #667eea, #764ba2)',
-            borderRadius: '20px',
+            width: '240px',
+            height: '240px',
+            background: 'rgba(255, 255, 255, 0.15)',
+            borderRadius: '60px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '0 auto 24px',
-            padding: '16px'
+            margin: '0 auto 32px',
+            padding: '48px',
+            border: '3px solid rgba(255, 255, 255, 0.25)',
+            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)'
           }}>
             <img
               src={logoJayna}
               alt="Jayna"
               style={{
-                width: '48px',
-                height: '48px',
-                objectFit: 'contain',
-                filter: 'brightness(0) invert(1)'
+                width: '144px',
+                height: '144px',
+                objectFit: 'contain'
               }}
             />
           </div>
@@ -440,6 +447,43 @@ export function ValidarBilhete() {
           </div>
         )}
 
+        {/* Mensagem de Sucesso do Resgate */}
+        {sucessoResgate && (
+          <div style={{
+            background: 'linear-gradient(135deg, #dcfce7, #bbf7d0)',
+            border: '2px solid #22c55e',
+            borderRadius: '16px',
+            padding: '20px',
+            marginBottom: '24px',
+            textAlign: 'center',
+            animation: 'fadeIn 0.3s ease-in-out'
+          }}>
+            <div style={{
+              fontSize: '32px',
+              marginBottom: '12px'
+            }}>
+              🎉
+            </div>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: '#166534',
+              margin: '0 0 12px 0'
+            }}>
+              Resgate Realizado com Sucesso!
+            </h3>
+            <p style={{
+              fontSize: '14px',
+              color: '#166534',
+              margin: '0',
+              lineHeight: '1.5',
+              whiteSpace: 'pre-line'
+            }}>
+              {sucessoResgate}
+            </p>
+          </div>
+        )}
+
         {/* Formulário de Contato para Bilhetes Válidos */}
         {mostrarFormularioContato && resultado?.valido && (
           <div style={{
@@ -604,6 +648,31 @@ export function ValidarBilhete() {
                 </div>
               </div>
               
+              {/* Mensagem de Erro */}
+              {erroFormulario && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #fee2e2, #fecaca)',
+                  border: '1px solid #f87171',
+                  borderRadius: '12px',
+                  padding: '12px 16px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  animation: 'fadeIn 0.3s ease-in-out'
+                }}>
+                  <span style={{ fontSize: '16px' }}>⚠️</span>
+                  <span style={{
+                    fontSize: '13px',
+                    color: '#991b1b',
+                    fontWeight: '500',
+                    lineHeight: '1.4'
+                  }}>
+                    {erroFormulario}
+                  </span>
+                </div>
+              )}
+              
               <div style={{
                 display: 'flex',
                 gap: '12px',
@@ -719,36 +788,19 @@ export function ValidarBilhete() {
             margin: '0 0 12px 0',
             lineHeight: '1.5'
           }}>
-            Entre em contato para resgatar seu prêmio:
+            Seu prêmio será conferido e enviado automaticamente de acordo com os dados preenchidos, prencha-os com atenção:
           </p>
           <div style={{
             fontSize: '14px',
             color: '#666',
             lineHeight: '1.6'
           }}>
-            <div>📞 (11) 99999-9999</div>
-            <div>📧 premios@jayna.com.br</div>
-            <div>🕒 Segunda a Sexta, 9h às 18h</div>
+
           </div>
         </div>
 
         {/* Link para Admin */}
-        <button
-          onClick={() => navigate('/login')}
-          style={{
-            fontSize: '12px',
-            color: '#9ca3af',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            textDecoration: 'underline',
-            transition: 'color 0.2s ease'
-          }}
-          onMouseOver={(e) => e.currentTarget.style.color = '#667eea'}
-          onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
-        >
-          Área Administrativa
-        </button>
+
       </div>
 
       {/* CSS para animações */}

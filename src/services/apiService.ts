@@ -7,6 +7,7 @@ import type {
   CriarUsuarioRequest,
   Usuario,
   FiltrosBilhetes,
+  BilhetesPaginadosResponse,
   StorageInfo,
   PdfUrlResponse,
   ValidarBilheteRequest,
@@ -199,6 +200,21 @@ export const apiService = {
     return apiRequest<Bilhete[]>(endpoint);
   },
 
+  async listarBilhetesPaginados(filtros?: FiltrosBilhetes): Promise<BilhetesPaginadosResponse> {
+    const params = new URLSearchParams();
+    
+    if (filtros?.status) params.append('status', filtros.status);
+    if (filtros?.dataInicio) params.append('dataInicio', filtros.dataInicio);
+    if (filtros?.dataFim) params.append('dataFim', filtros.dataFim);
+    if (filtros?.pagina) params.append('pagina', filtros.pagina.toString());
+    if (filtros?.limite) params.append('limite', filtros.limite.toString());
+
+    const queryString = params.toString();
+    const endpoint = queryString ? `/bilhetes?${queryString}` : '/bilhetes';
+    
+    return apiRequest<BilhetesPaginadosResponse>(endpoint);
+  },
+
   // === PDF ===
 
   async gerarPdf(bilheteId: string): Promise<Blob> {
@@ -319,6 +335,53 @@ export const mockApiService = {
     }
 
     return bilhetesFiltrados;
+  },
+
+  async listarBilhetesPaginados(filtros?: FiltrosBilhetes): Promise<BilhetesPaginadosResponse> {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Gerar dados mock maiores para simular paginação
+    const totalBilhetes = 150;
+    const pagina = filtros?.pagina || 1;
+    const limite = filtros?.limite || 10;
+    
+    const bilhetesMock: Bilhete[] = Array.from({ length: totalBilhetes }, (_, index) => ({
+      id: `mock_${index + 1}`,
+      codigoUnico: `A1B2C3D4E${String(index).padStart(2, '0')}`,
+      numeroSequencial: `GANHADOR ${String(index + 1).padStart(3, '0')}`,
+      qrCodeRef: `QR${index + 1}`,
+      pdfUrl: `https://mock.com/bilhete-${index + 1}.pdf`,
+      status: ['GERADO', 'PREMIADO', 'CANCELADO'][index % 3] as any,
+      createdAt: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toISOString(),
+      updatedAt: new Date().toISOString(),
+      usuarioId: null,
+      usuario: null,
+    }));
+
+    // Aplicar filtros
+    let bilhetesFiltrados = bilhetesMock;
+    if (filtros?.status) {
+      bilhetesFiltrados = bilhetesFiltrados.filter(b => b.status === filtros.status);
+    }
+
+    // Calcular paginação
+    const totalItens = bilhetesFiltrados.length;
+    const totalPaginas = Math.ceil(totalItens / limite);
+    const inicio = (pagina - 1) * limite;
+    const fim = inicio + limite;
+    const bilhetesPagina = bilhetesFiltrados.slice(inicio, fim);
+
+    return {
+      bilhetes: bilhetesPagina,
+      paginacao: {
+        paginaAtual: pagina,
+        itensPorPagina: limite,
+        totalItens,
+        totalPaginas,
+        temPaginaAnterior: pagina > 1,
+        temProximaPagina: pagina < totalPaginas
+      }
+    };
   },
 
   async validarBilhete(dados: ValidarBilheteRequest): Promise<ValidarBilheteResponse> {

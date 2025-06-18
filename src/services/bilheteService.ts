@@ -4,6 +4,7 @@ import type {
   GerarLoteRequest,
   GerarLoteResponse,
   FiltrosBilhetes,
+  BilhetesPaginadosResponse,
   ValidarBilheteResponse,
   StorageInfo,
   PdfUrlResponse,
@@ -48,15 +49,15 @@ export class BilheteService {
     }
   }
 
-  // === LISTAGEM E FILTROS ===
+  // === LISTAGEM E FILTROS COM PAGINAÇÃO ===
   
   /**
-   * Lista todos os bilhetes com filtros opcionais
+   * Lista bilhetes com paginação e filtros opcionais
    */
-  async listarBilhetes(filtros?: FiltrosBilhetes): Promise<Bilhete[]> {
+  async listarBilhetesPaginados(filtros?: FiltrosBilhetes): Promise<BilhetesPaginadosResponse> {
     try {
-      const bilhetes = await bilheteApiService.listarBilhetes(filtros);
-      return bilhetes;
+      const response = await bilheteApiService.listarBilhetesPaginados(filtros);
+      return response;
     } catch (error) {
       if (error instanceof ApiError) {
         throw new Error(`Erro ao listar bilhetes: ${error.message}`);
@@ -66,18 +67,86 @@ export class BilheteService {
   }
 
   /**
-   * Busca bilhetes por status
+   * Lista todos os bilhetes com filtros opcionais (compatibilidade - sem paginação)
+   * @deprecated Use listarBilhetesPaginados para melhor performance
+   */
+  async listarBilhetes(filtros?: FiltrosBilhetes): Promise<Bilhete[]> {
+    try {
+      // Para compatibilidade, buscar todas as páginas
+      const primeiraPage = await this.listarBilhetesPaginados({
+        ...filtros,
+        pagina: 1,
+        limite: 100 // Limite alto para pegar mais resultados
+      });
+      
+      let todosOsBilhetes = [...primeiraPage.bilhetes];
+      
+      // Se houver mais páginas, buscar todas
+      if (primeiraPage.paginacao.totalPaginas > 1) {
+        const promessas = [];
+        for (let pagina = 2; pagina <= primeiraPage.paginacao.totalPaginas; pagina++) {
+          promessas.push(
+            this.listarBilhetesPaginados({
+              ...filtros,
+              pagina,
+              limite: 100
+            })
+          );
+        }
+        
+        const outrasPages = await Promise.all(promessas);
+        outrasPages.forEach(page => {
+          todosOsBilhetes = [...todosOsBilhetes, ...page.bilhetes];
+        });
+      }
+      
+      return todosOsBilhetes;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(`Erro ao listar bilhetes: ${error.message}`);
+      }
+      throw new Error('Erro de conexão ao listar bilhetes');
+    }
+  }
+
+  /**
+   * Busca bilhetes por status com paginação
+   */
+  async buscarPorStatusPaginado(
+    status: 'GERADO' | 'PREMIADO' | 'CANCELADO',
+    pagina?: number,
+    limite?: number
+  ): Promise<BilhetesPaginadosResponse> {
+    return this.listarBilhetesPaginados({ status, pagina, limite });
+  }
+
+  /**
+   * Busca bilhetes por status (compatibilidade)
+   * @deprecated Use buscarPorStatusPaginado para melhor performance
    */
   async buscarPorStatus(status: 'GERADO' | 'PREMIADO' | 'CANCELADO'): Promise<Bilhete[]> {
     return this.listarBilhetes({ status });
-      }
+  }
 
   /**
-   * Busca bilhetes por período
+   * Busca bilhetes por período com paginação
+   */
+  async buscarPorPeriodoPaginado(
+    dataInicio: string, 
+    dataFim: string,
+    pagina?: number,
+    limite?: number
+  ): Promise<BilhetesPaginadosResponse> {
+    return this.listarBilhetesPaginados({ dataInicio, dataFim, pagina, limite });
+  }
+
+  /**
+   * Busca bilhetes por período (compatibilidade)
+   * @deprecated Use buscarPorPeriodoPaginado para melhor performance
    */
   async buscarPorPeriodo(dataInicio: string, dataFim: string): Promise<Bilhete[]> {
     return this.listarBilhetes({ dataInicio, dataFim });
-      }
+  }
 
   // === VALIDAÇÃO DE BILHETES ===
   
@@ -94,7 +163,7 @@ export class BilheteService {
         mensagem: 'Erro ao validar bilhete',
         tipo: 'erro'
       };
-      }
+    }
   }
 
   /**
@@ -160,7 +229,7 @@ export class BilheteService {
     } catch (error) {
       console.error('Erro ao remover PDF:', error);
       throw new Error('Erro ao remover PDF do cache');
-      }
+    }
   }
 
   /**
@@ -185,7 +254,7 @@ export class BilheteService {
       URL.revokeObjectURL(url);
     } catch (error) {
       throw new Error('Erro ao fazer download do PDF');
-      }
+    }
   }
 
   // === INFORMAÇÕES DO SISTEMA ===
@@ -198,36 +267,40 @@ export class BilheteService {
       const info = await bilheteApiService.obterInfoStorage();
       return info;
     } catch (error) {
-      if (error instanceof ApiError) {
-        throw new Error(`Erro ao obter informações do storage: ${error.message}`);
-      }
+      console.error('Erro ao obter informações do storage:', error);
       throw new Error('Erro de conexão ao obter informações do storage');
     }
   }
 
-  // === UTILITÁRIOS ===
+  // === UTILITÁRIOS DE FORMATAÇÃO ===
   
   /**
-   * Formata data para o formato aceito pela API (YYYY-MM-DD)
+   * Formatar data para envio à API (YYYY-MM-DD)
    */
   formatarDataParaApi(data: Date): string {
     return data.toISOString().split('T')[0];
   }
 
   /**
-   * Converte data ISO para formato brasileiro
+   * Formatar data ISO para exibição brasileira
    */
   formatarDataBrasileira(dataISO: string): string {
-    const data = new Date(dataISO);
-    return data.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      const data = new Date(dataISO);
+      return data.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Data inválida';
+    }
   }
 
+  // === ESTATÍSTICAS ===
+  
   /**
    * Obtém estatísticas dos bilhetes
    */
@@ -238,44 +311,54 @@ export class BilheteService {
     cancelados: number;
   }> {
     try {
-      const bilhetes = await this.listarBilhetes();
+      // Buscar estatísticas usando a primeira página com limite alto
+      const response = await this.listarBilhetesPaginados({ limite: 1 });
+      const total = response.paginacao.totalItens;
       
-      const estatisticas = {
-        total: bilhetes.length,
-        gerados: bilhetes.filter(b => b.status === 'GERADO').length,
-        premiados: bilhetes.filter(b => b.status === 'PREMIADO').length,
-        cancelados: bilhetes.filter(b => b.status === 'CANCELADO').length,
-      };
+      // Buscar por status específicos para estatísticas precisas
+      const [gerados, premiados, cancelados] = await Promise.all([
+        this.listarBilhetesPaginados({ status: 'GERADO', limite: 1 }),
+        this.listarBilhetesPaginados({ status: 'PREMIADO', limite: 1 }),
+        this.listarBilhetesPaginados({ status: 'CANCELADO', limite: 1 })
+      ]);
 
-      return estatisticas;
+      return {
+        total,
+        gerados: gerados.paginacao.totalItens,
+        premiados: premiados.paginacao.totalItens,
+        cancelados: cancelados.paginacao.totalItens
+      };
     } catch (error) {
+      console.error('Erro ao obter estatísticas:', error);
       return {
         total: 0,
         gerados: 0,
         premiados: 0,
-        cancelados: 0,
+        cancelados: 0
       };
     }
   }
 
+  // === UTILITÁRIOS DE STATUS ===
+  
   /**
-   * Obtém cor do status para exibição
+   * Obter classe CSS para colorir status
    */
   obterCorStatus(status: string): string {
     switch (status) {
       case 'GERADO':
-        return 'text-blue-600 bg-blue-100';
+        return 'bg-blue-100 text-blue-800';
       case 'PREMIADO':
-        return 'text-green-600 bg-green-100';
+        return 'bg-green-100 text-green-800';
       case 'CANCELADO':
-        return 'text-red-600 bg-red-100';
+        return 'bg-red-100 text-red-800';
       default:
-        return 'text-gray-600 bg-gray-100';
-      }
+        return 'bg-gray-100 text-gray-800';
+    }
   }
 
   /**
-   * Obtém texto amigável do status
+   * Obter texto amigável para status
    */
   obterTextoStatus(status: string): string {
     switch (status) {
@@ -290,15 +373,16 @@ export class BilheteService {
     }
   }
 
+  // === VALIDAÇÕES ===
+  
   /**
-   * Valida se o código tem formato válido
+   * Validar formato do código de bilhete
    */
   validarFormatoCodigo(codigo: string): boolean {
-    // Código deve ter pelo menos 3 caracteres e ser alfanumérico
-    const regex = /^[A-Z0-9]{3,}$/;
-    return regex.test(codigo.toUpperCase());
-    }
+    // Código deve ter exatamente 11 caracteres alfanuméricos
+    return /^[A-Z0-9]{11}$/.test(codigo);
   }
+}
 
 // Instância singleton do serviço
 export const bilheteService = new BilheteService(); 

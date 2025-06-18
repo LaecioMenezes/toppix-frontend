@@ -14,6 +14,11 @@ export interface Bilhete {
   dataResgate?: string;
   usuarioId?: string | null;
   usuario?: Usuario | null;
+  // Campos de resgate (preenchidos quando status = PREMIADO)
+  nomeCompleto?: string;
+  telefone?: string;
+  emailResgate?: string;
+  chavePix?: string;
 }
 
 // Interface do Usuário
@@ -82,11 +87,29 @@ export interface ResgateResponse {
   dataResgate: string;
 }
 
-// Interface para filtros de listagem (API real)
+// Interface para filtros de listagem com paginação (API real)
 export interface FiltrosBilhetes {
   status?: StatusBilhete;
   dataInicio?: string; // formato: YYYY-MM-DD
   dataFim?: string;    // formato: YYYY-MM-DD
+  pagina?: number;     // número da página (padrão: 1)
+  limite?: number;     // itens por página (padrão: 10, máximo: 100)
+}
+
+// Interface para metadados de paginação (baseado na API real)
+export interface MetadadosPaginacao {
+  paginaAtual: number;
+  itensPorPagina: number;
+  totalItens: number;
+  totalPaginas: number;
+  temPaginaAnterior: boolean;
+  temProximaPagina: boolean;
+}
+
+// Interface para resposta paginada de bilhetes (API real)
+export interface BilhetesPaginadosResponse {
+  bilhetes: Bilhete[];
+  paginacao: MetadadosPaginacao;
 }
 
 // Interface para informações do storage
