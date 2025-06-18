@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { QrCode, Gift, AlertCircle, CheckCircle2, Scan, User, Phone, Mail, CreditCard } from 'lucide-react';
 import { useBilhetes } from '../hooks/useBilhetes';
 import type { ValidarBilheteResponse } from '../types';
+import logoJayna from '../assets/images/logotipo-jayna-icone.png';
 
 // Schema de validação para o bilhete
 const validarBilheteSchema = z.object({
@@ -109,12 +110,28 @@ export function ValidarBilhete() {
       }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <QrCode style={{ 
-            width: '64px', 
-            height: '64px', 
-            margin: '0 auto 16px', 
-            color: '#3b82f6' 
-          }} />
+          <div style={{
+            width: '80px',
+            height: '80px',
+            margin: '0 auto 16px',
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+            border: '2px solid rgba(255, 255, 255, 0.8)'
+          }}>
+            <img 
+              src={logoJayna} 
+              alt="Jayna Logo" 
+              style={{ 
+                width: '48px', 
+                height: '48px',
+                objectFit: 'contain'
+              }} 
+            />
+          </div>
           <h1 style={{ 
             fontSize: '30px', 
             fontWeight: 'bold', 

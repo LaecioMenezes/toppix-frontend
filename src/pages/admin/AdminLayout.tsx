@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Plus, Menu, X, Settings, BarChart3, Sparkles, Home } from 'lucide-react';
+import logoJayna from '../../assets/images/logotipo-jayna-icone.png';
 
 export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -147,15 +148,24 @@ export function AdminLayout() {
               <div style={{ 
                 width: '48px', 
                 height: '48px', 
-                backgroundColor: '#3b82f6', 
+                backgroundColor: 'white', 
                 borderRadius: '8px', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center', 
                 marginRight: '16px', 
-                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)' 
+                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                border: '2px solid #e5e7eb'
               }}>
-                <span style={{ color: 'white', fontWeight: 'bold', fontSize: '20px' }}>🎫</span>
+                <img 
+                  src={logoJayna} 
+                  alt="Jayna Logo" 
+                  style={{ 
+                    width: '32px', 
+                    height: '32px',
+                    objectFit: 'contain'
+                  }} 
+                />
               </div>
               <div>
                 <h1 style={{ 
@@ -171,7 +181,7 @@ export function AdminLayout() {
                   color: '#6b7280', 
                   margin: 0 
                 }}>
-                  Plataforma Top Pix
+                  Plataforma Jayna
                 </p>
               </div>
             </div>
@@ -327,13 +337,22 @@ export function AdminLayout() {
                 <div style={{ 
                   width: '32px', 
                   height: '32px', 
-                  backgroundColor: '#3b82f6', 
+                  backgroundColor: 'white', 
                   borderRadius: '8px', 
                   display: 'flex', 
                   alignItems: 'center', 
-                  justifyContent: 'center' 
+                  justifyContent: 'center',
+                  border: '2px solid #e5e7eb'
                 }}>
-                  <span style={{ color: 'white', fontWeight: 'bold', fontSize: '14px' }}>🎫</span>
+                  <img 
+                    src={logoJayna} 
+                    alt="Jayna Logo" 
+                    style={{ 
+                      width: '20px', 
+                      height: '20px',
+                      objectFit: 'contain'
+                    }} 
+                  />
                 </div>
                 <h1 style={{ 
                   fontSize: '18px', 
