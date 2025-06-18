@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { List, Search, Filter, Download, FileText, Eye, Loader2, BarChart3, TrendingUp, Users, Clock, Upload, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { useBilhetes } from '../../hooks/useBilhetes';
 import type { StatusBilhete, FiltrosBilhetes } from '../../types';

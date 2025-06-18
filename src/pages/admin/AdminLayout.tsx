@@ -1,15 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Plus, Menu, X, Settings, BarChart3, Sparkles, Home } from 'lucide-react';
-import { GerarBilhetes } from './GerarBilhetes';
-import { ListarBilhetes } from './ListarBilhetes';
-
-type AdminPage = 'gerar' | 'listar';
 
 export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [currentPage, setCurrentPage] = useState<AdminPage>('gerar'); // Estado interno para controlar a página
+  const location = useLocation();
 
   // Detectar largura da tela
   useEffect(() => {
@@ -23,45 +19,28 @@ export function AdminLayout() {
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
 
-  // Função para renderizar o componente correto baseado no estado interno
-  const renderCurrentPage = () => {
-    console.log('Rendering page:', currentPage);
-    
-    switch (currentPage) {
-      case 'gerar':
-        return <GerarBilhetes />;
-      case 'listar':
-        return <ListarBilhetes />;
-      default:
-        return <GerarBilhetes />;
-    }
-  };
-
   const navigation = [
     {
       name: 'Gerar Bilhetes',
-      page: 'gerar' as AdminPage,
+      path: '/admin/gerar',
       icon: Plus,
       description: 'Criar novos bilhetes',
     },
     {
       name: 'Listar Bilhetes',
-      page: 'listar' as AdminPage,
+      path: '/admin/listar',
       icon: BarChart3,
       description: 'Visualizar todos os bilhetes',
     },
   ];
 
   const NavItem = ({ item }: { item: typeof navigation[0] }) => {
-    const isActive = currentPage === item.page;
+    const isActive = location.pathname === item.path;
     
     return (
-      <button
-        onClick={() => {
-          console.log('Navegando para:', item.page);
-          setCurrentPage(item.page);
-          setSidebarOpen(false);
-        }}
+      <Link
+        to={item.path}
+        onClick={() => setSidebarOpen(false)}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -77,7 +56,6 @@ export function AdminLayout() {
           position: 'relative',
           width: '100%',
           cursor: 'pointer',
-          textAlign: 'left'
         }}
         onMouseOver={(e) => {
           if (!isActive) {
@@ -118,7 +96,7 @@ export function AdminLayout() {
             <Sparkles style={{ width: '20px', height: '20px', color: 'rgba(255, 255, 255, 0.6)' }} />
           </div>
         )}
-      </button>
+      </Link>
     );
   };
 
@@ -389,10 +367,8 @@ export function AdminLayout() {
 
         {/* Page Content */}
         <main style={{ minHeight: '100vh' }}>
-
-          
-          {/* Renderização do componente atual */}
-          {renderCurrentPage()}
+          {/* Renderização das rotas aninhadas */}
+          <Outlet />
         </main>
       </div>
     </div>
