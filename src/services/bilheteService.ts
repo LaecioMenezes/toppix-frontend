@@ -1,26 +1,26 @@
+import { apiService, mockApiService } from './apiService';
 import type { 
   Bilhete, 
-  GerarBilhetesRequest, 
-  ValidarBilheteRequest, 
-  ValidarBilheteResponse,
+  GerarLoteRequest,
+  GerarLoteResponse,
   FiltrosBilhetes,
-  ExportarBilhetesRequest,
-  ApiResponse 
+  ValidarBilheteResponse,
+  StorageInfo,
+  PdfUrlResponse,
+  ResgateResponse
 } from '../types';
 
-// Configuração da API
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// Usar API real ou mock baseado na variável de ambiente
+// Por padrão, usar API real (mock apenas se explicitamente configurado)
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || false;
+const bilheteApiService = USE_MOCK ? mockApiService : apiService;
 
-// Classe para lidar com erros da API
+// Classe para tratamento de erros da API
 class ApiError extends Error {
   status: number;
   data?: any;
 
-  constructor(
-    message: string,
-    status: number,
-    data?: any
-  ) {
+  constructor(message: string, status: number, data?: any) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -28,254 +28,280 @@ class ApiError extends Error {
   }
 }
 
-// Função auxiliar para fazer requisições
-async function apiRequest<T>(
-  endpoint: string, 
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`;
+// Classe principal do serviço de bilhetes
+export class BilheteService {
   
-  const defaultOptions: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  };
-
-  try {
-    const response = await fetch(url, defaultOptions);
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new ApiError(
-        data.mensagem || 'Erro na requisição',
-        response.status,
-        data
-      );
-    }
-
-    return data;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError('Erro de conexão', 0, error);
-  }
-}
-
-// Serviços da API
-export const bilheteService = {
-  // Gerar bilhetes
-  async gerarBilhetes(dados: GerarBilhetesRequest): Promise<ApiResponse<Bilhete[]>> {
-    return apiRequest<Bilhete[]>('/bilhetes/gerar', {
-      method: 'POST',
-      body: JSON.stringify(dados),
-    });
-  },
-
-  // Listar bilhetes
-  async listarBilhetes(filtros?: FiltrosBilhetes): Promise<ApiResponse<Bilhete[]>> {
-    const params = new URLSearchParams();
-    
-    if (filtros?.status) params.append('status', filtros.status);
-    if (filtros?.prefixo) params.append('prefixo', filtros.prefixo);
-    if (filtros?.codigo) params.append('codigo', filtros.codigo);
-    if (filtros?.dataInicio) params.append('dataInicio', filtros.dataInicio.toISOString());
-    if (filtros?.dataFim) params.append('dataFim', filtros.dataFim.toISOString());
-
-    const queryString = params.toString();
-    const endpoint = queryString ? `/bilhetes?${queryString}` : '/bilhetes';
-    
-    return apiRequest<Bilhete[]>(endpoint);
-  },
-
-  // Buscar bilhete por ID
-  async buscarBilhete(id: string): Promise<ApiResponse<Bilhete>> {
-    return apiRequest<Bilhete>(`/bilhetes/${id}`);
-  },
-
-  // Validar bilhete
-  async validarBilhete(dados: ValidarBilheteRequest): Promise<ValidarBilheteResponse> {
+  // === GERAÇÃO DE BILHETES ===
+  
+  /**
+   * Gera um lote de bilhetes numerados sequencialmente
+   */
+  async gerarLote(dados: GerarLoteRequest): Promise<GerarLoteResponse> {
     try {
-      const response = await apiRequest<ValidarBilheteResponse>('/bilhetes/validar', {
-        method: 'POST',
-        body: JSON.stringify(dados),
-      });
-      
-      return response.dados || {
-        valido: false,
-        mensagem: 'Erro na validação',
-        tipo: 'erro'
-      };
+      const response = await bilheteApiService.gerarLote(dados);
+      return response;
     } catch (error) {
       if (error instanceof ApiError) {
-        return {
-          valido: false,
-          mensagem: error.message,
-          tipo: 'erro'
-        };
+        throw new Error(`Erro ao gerar lote: ${error.message}`);
       }
+      throw new Error('Erro de conexão ao gerar lote de bilhetes');
+    }
+  }
+
+  // === LISTAGEM E FILTROS ===
+  
+  /**
+   * Lista todos os bilhetes com filtros opcionais
+   */
+  async listarBilhetes(filtros?: FiltrosBilhetes): Promise<Bilhete[]> {
+    try {
+      const bilhetes = await bilheteApiService.listarBilhetes(filtros);
+      return bilhetes;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(`Erro ao listar bilhetes: ${error.message}`);
+      }
+      throw new Error('Erro de conexão ao listar bilhetes');
+    }
+  }
+
+  /**
+   * Busca bilhetes por status
+   */
+  async buscarPorStatus(status: 'GERADO' | 'PREMIADO' | 'CANCELADO'): Promise<Bilhete[]> {
+    return this.listarBilhetes({ status });
+      }
+
+  /**
+   * Busca bilhetes por período
+   */
+  async buscarPorPeriodo(dataInicio: string, dataFim: string): Promise<Bilhete[]> {
+    return this.listarBilhetes({ dataInicio, dataFim });
+      }
+
+  // === VALIDAÇÃO DE BILHETES ===
+  
+  /**
+   * Valida um bilhete pelo código único
+   */
+  async validarBilhete(codigo: string): Promise<ValidarBilheteResponse> {
+    try {
+      const response = await bilheteApiService.validarBilhete({ codigo });
+      return response;
+    } catch (error) {
       return {
         valido: false,
-        mensagem: 'Erro de conexão',
+        mensagem: 'Erro ao validar bilhete',
         tipo: 'erro'
       };
-    }
-  },
+      }
+  }
 
-  // Exportar bilhetes
-  async exportarBilhetes(dados: ExportarBilhetesRequest): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/bilhetes/exportar`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(dados),
+  /**
+   * Processa o resgate de um bilhete válido
+   */
+  async processarResgate(dados: {
+    codigo: string;
+    nomeCompleto: string;
+    telefone: string;
+    email: string;
+    chavePix: string;
+  }): Promise<ResgateResponse> {
+    try {
+      const response = await bilheteApiService.processarResgate(dados);
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(error.message);
+      }
+      throw new Error('Erro de conexão ao processar resgate');
+    }
+  }
+
+  // === GERAÇÃO DE PDF ===
+  
+  /**
+   * Gera PDF de um bilhete específico
+   */
+  async gerarPdf(bilheteId: string): Promise<Blob> {
+    try {
+      const pdfBlob = await bilheteApiService.gerarPdf(bilheteId);
+      return pdfBlob;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(`Erro ao gerar PDF: ${error.message}`);
+      }
+      throw new Error('Erro de conexão ao gerar PDF');
+    }
+  }
+
+  /**
+   * Obtém URL pré-assinada para download do PDF
+   */
+  async obterUrlPdf(bilheteId: string): Promise<PdfUrlResponse> {
+    try {
+      const response = await bilheteApiService.obterUrlPdf(bilheteId);
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(`Erro ao obter URL do PDF: ${error.message}`);
+      }
+      throw new Error('Erro de conexão ao obter URL do PDF');
+    }
+  }
+
+  /**
+   * Remove PDF do storage
+   */
+  async removerPdf(_bilheteId: string): Promise<{ message: string }> {
+    try {
+      // Método ainda não implementado na API real, usar mock
+      return { message: 'PDF removido do cache com sucesso' };
+    } catch (error) {
+      console.error('Erro ao remover PDF:', error);
+      throw new Error('Erro ao remover PDF do cache');
+      }
+  }
+
+  /**
+   * Faz download direto do PDF
+   */
+  async downloadPdf(bilheteId: string, nomeArquivo?: string): Promise<void> {
+    try {
+      const pdfBlob = await this.gerarPdf(bilheteId);
+      
+      // Criar URL temporária para download
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nomeArquivo || `bilhete-${bilheteId}.pdf`;
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      throw new Error('Erro ao fazer download do PDF');
+      }
+  }
+
+  // === INFORMAÇÕES DO SISTEMA ===
+  
+  /**
+   * Obtém informações do storage MinIO
+   */
+  async obterInfoStorage(): Promise<StorageInfo> {
+    try {
+      const info = await bilheteApiService.obterInfoStorage();
+      return info;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(`Erro ao obter informações do storage: ${error.message}`);
+      }
+      throw new Error('Erro de conexão ao obter informações do storage');
+    }
+  }
+
+  // === UTILITÁRIOS ===
+  
+  /**
+   * Formata data para o formato aceito pela API (YYYY-MM-DD)
+   */
+  formatarDataParaApi(data: Date): string {
+    return data.toISOString().split('T')[0];
+  }
+
+  /**
+   * Converte data ISO para formato brasileiro
+   */
+  formatarDataBrasileira(dataISO: string): string {
+    const data = new Date(dataISO);
+    return data.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
+  }
 
-    if (!response.ok) {
-      throw new ApiError('Erro ao exportar bilhetes', response.status);
-    }
+  /**
+   * Obtém estatísticas dos bilhetes
+   */
+  async obterEstatisticas(): Promise<{
+    total: number;
+    gerados: number;
+    premiados: number;
+    cancelados: number;
+  }> {
+    try {
+      const bilhetes = await this.listarBilhetes();
+      
+      const estatisticas = {
+        total: bilhetes.length,
+        gerados: bilhetes.filter(b => b.status === 'GERADO').length,
+        premiados: bilhetes.filter(b => b.status === 'PREMIADO').length,
+        cancelados: bilhetes.filter(b => b.status === 'CANCELADO').length,
+      };
 
-    return response.blob();
-  },
-
-  // Visualizar PDF do bilhete
-  async visualizarPDF(id: string): Promise<Blob> {
-    const response = await fetch(`${API_BASE_URL}/bilhetes/${id}/pdf`);
-
-    if (!response.ok) {
-      throw new ApiError('Erro ao gerar PDF', response.status);
-    }
-
-    return response.blob();
-  },
-};
-
-// Mock para desenvolvimento (será removido quando o backend estiver pronto)
-export const mockBilheteService = {
-  async gerarBilhetes(dados: GerarBilhetesRequest): Promise<ApiResponse<Bilhete[]>> {
-    // Simula delay da API
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const bilhetes: Bilhete[] = Array.from({ length: dados.quantidade }, (_, index) => ({
-      id: `mock-${Date.now()}-${index}`,
-      numero: String(index + 1).padStart(6, '0'),
-      codigo: `${dados.prefixo}-${Math.random().toString(36).toUpperCase().substring(2, 8)}`,
-      prefixo: dados.prefixo,
-      status: 'ativo' as const,
-      valor: dados.valor,
-      dataCriacao: new Date(),
-      dataExpiracao: dados.dataExpiracao,
-    }));
-
-    return {
-      sucesso: true,
-      dados: bilhetes,
-      mensagem: `${dados.quantidade} bilhetes gerados com sucesso!`
-    };
-  },
-
-  async listarBilhetes(_filtros?: FiltrosBilhetes): Promise<ApiResponse<Bilhete[]>> {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Dados mock
-    const bilhetesMock: Bilhete[] = [
-      {
-        id: 'mock-1',
-        numero: '000001',
-        codigo: 'GANHADOR-ABC123',
-        prefixo: 'GANHADOR',
-        status: 'premiado',
-        valor: 100,
-        dataCriacao: new Date('2024-01-01'),
-        dataValidacao: new Date('2024-01-15'),
-      },
-      {
-        id: 'mock-2',
-        numero: '000002',
-        codigo: 'GANHADOR-DEF456',
-        prefixo: 'GANHADOR',
-        status: 'ativo',
-        dataCriacao: new Date('2024-01-02'),
-      },
-    ];
-
-    return {
-      sucesso: true,
-      dados: bilhetesMock,
-    };
-  },
-
-  async validarBilhete(dados: ValidarBilheteRequest): Promise<ValidarBilheteResponse> {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Simula diferentes cenários
-    if (dados.codigo === 'GANHADOR-ABC123') {
+      return estatisticas;
+    } catch (error) {
       return {
-        valido: true,
-        bilhete: {
-          id: 'mock-1',
-          numero: '000001',
-          codigo: 'GANHADOR-ABC123',
-          prefixo: 'GANHADOR',
-          status: 'premiado',
-          valor: 100,
-          dataCriacao: new Date('2024-01-01'),
-          dataValidacao: new Date(),
-        },
-        mensagem: 'Parabéns! Seu bilhete foi premiado com R$ 100,00!',
-        tipo: 'sucesso'
+        total: 0,
+        gerados: 0,
+        premiados: 0,
+        cancelados: 0,
       };
     }
-    
-    if (dados.codigo === 'GANHADOR-DEF456') {
-      return {
-        valido: true,
-        bilhete: {
-          id: 'mock-2',
-          numero: '000002',
-          codigo: 'GANHADOR-DEF456',
-          prefixo: 'GANHADOR',
-          status: 'ativo',
-          dataCriacao: new Date('2024-01-02'),
-        },
-        mensagem: 'Bilhete válido, mas não foi premiado. Continue participando!',
-        tipo: 'aviso'
-      };
+  }
+
+  /**
+   * Obtém cor do status para exibição
+   */
+  obterCorStatus(status: string): string {
+    switch (status) {
+      case 'GERADO':
+        return 'text-blue-600 bg-blue-100';
+      case 'PREMIADO':
+        return 'text-green-600 bg-green-100';
+      case 'CANCELADO':
+        return 'text-red-600 bg-red-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
+      }
+  }
+
+  /**
+   * Obtém texto amigável do status
+   */
+  obterTextoStatus(status: string): string {
+    switch (status) {
+      case 'GERADO':
+        return 'Gerado';
+      case 'PREMIADO':
+        return 'Premiado';
+      case 'CANCELADO':
+        return 'Cancelado';
+      default:
+        return 'Desconhecido';
     }
-    
-    return {
-      valido: false,
-      mensagem: 'Código inválido ou bilhete expirado.',
-      tipo: 'erro'
-    };
-  },
+  }
 
-  async exportarBilhetes(dados: ExportarBilhetesRequest): Promise<Blob> {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Simula criação de arquivo CSV ou ZIP
-    const conteudo = dados.formato === 'csv' 
-      ? 'Número,Código,Status,Valor,Data Criação\n000001,GANHADOR-ABC123,premiado,100,2024-01-01\n000002,GANHADOR-DEF456,ativo,,2024-01-02'
-      : 'Arquivo ZIP simulado com PDFs dos bilhetes';
-    
-    return new Blob([conteudo], { 
-      type: dados.formato === 'csv' ? 'text/csv' : 'application/zip' 
-    });
-  },
+  /**
+   * Valida se o código tem formato válido
+   */
+  validarFormatoCodigo(codigo: string): boolean {
+    // Código deve ter pelo menos 3 caracteres e ser alfanumérico
+    const regex = /^[A-Z0-9]{3,}$/;
+    return regex.test(codigo.toUpperCase());
+    }
+  }
 
-  async visualizarPDF(id: string): Promise<Blob> {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Simula PDF
-    const conteudo = `PDF simulado para o bilhete ${id}`;
-    return new Blob([conteudo], { type: 'application/pdf' });
-  },
-};
+// Instância singleton do serviço
+export const bilheteService = new BilheteService(); 
 
-// Usa o serviço mock em desenvolvimento
-export const currentBilheteService = import.meta.env.VITE_USE_MOCK === 'true' 
-  ? mockBilheteService 
-  : bilheteService; 
+// Exportar para compatibilidade com código existente
+export default bilheteService; 

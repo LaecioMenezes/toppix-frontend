@@ -2,10 +2,23 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ListarBilhetes } from '../../../pages/admin/ListarBilhetes';
 import { BilheteProvider } from '../../../contexts/BilheteContext';
-import * as bilheteService from '../../../services/bilheteService';
+import { bilheteService } from '../../../services/bilheteService';
+import type { Bilhete } from '../../../types';
 
 // Mock do serviço
-vi.mock('../../../services/bilheteService');
+vi.mock('../../../services/bilheteService', () => ({
+  bilheteService: {
+    gerarLote: vi.fn(),
+    listarBilhetes: vi.fn(),
+    validarBilhete: vi.fn(),
+    downloadPdf: vi.fn(),
+    obterUrlPdf: vi.fn(),
+    formatarDataBrasileira: vi.fn().mockReturnValue('01/01/2024 10:30'),
+    obterCorStatus: vi.fn().mockReturnValue('bg-blue-100 text-blue-800'),
+    obterTextoStatus: vi.fn().mockReturnValue('Gerado'),
+    validarFormatoCodigo: vi.fn(),
+  }
+}));
 
 const renderWithProvider = (component: React.ReactElement) => {
   return render(
@@ -15,151 +28,111 @@ const renderWithProvider = (component: React.ReactElement) => {
   );
 };
 
-const mockBilhetes = [
+const mockBilhetes: Bilhete[] = [
   {
-    id: 'test-1',
-    numero: '000001',
-    codigo: 'GANHADOR-ABC123',
-    prefixo: 'GANHADOR',
-    status: 'premiado' as const,
-    valor: 100,
-    dataCriacao: new Date('2024-01-01'),
-    dataValidacao: new Date('2024-01-15'),
+    id: '1',
+    numeroSequencial: 'GANHADOR 001',
+    codigoUnico: 'A1B2C3D4E5F',
+    qrCodeRef: 'qr-ref-1',
+    pdfUrl: undefined,
+    status: 'GERADO',
+    createdAt: '2024-01-01T10:30:00Z',
+    updatedAt: '2024-01-01T10:30:00Z',
+    dataResgate: undefined,
+    usuarioId: 'user-1',
+    usuario: undefined
   },
   {
-    id: 'test-2',
-    numero: '000002',
-    codigo: 'GANHADOR-DEF456',
-    prefixo: 'GANHADOR',
-    status: 'ativo' as const,
-    dataCriacao: new Date('2024-01-02'),
-  },
-  {
-    id: 'test-3',
-    numero: '000003',
-    codigo: 'PROMO-GHI789',
-    prefixo: 'PROMO',
-    status: 'expirado' as const,
-    dataCriacao: new Date('2024-01-03'),
-    dataExpiracao: new Date('2024-01-10'),
-  },
+    id: '2',
+    numeroSequencial: 'GANHADOR 002',
+    codigoUnico: 'F6G7H8I9J0K',
+    qrCodeRef: 'qr-ref-2',
+    pdfUrl: undefined,
+    status: 'PREMIADO',
+    createdAt: '2024-01-01T11:00:00Z',
+    updatedAt: '2024-01-01T12:00:00Z',
+    dataResgate: '2024-01-01T12:00:00Z',
+    usuarioId: 'user-1',
+    usuario: undefined
+  }
 ];
 
 describe('ListarBilhetes Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(bilheteService.listarBilhetes).mockResolvedValue(mockBilhetes);
+  });
+
+  it('deve renderizar a lista de bilhetes', async () => {
+    renderWithProvider(<ListarBilhetes />);
     
-    // Mock padrão que retorna os bilhetes
-    vi.mocked(bilheteService.currentBilheteService.listarBilhetes).mockResolvedValue({
-      sucesso: true,
-      dados: mockBilhetes,
+    expect(screen.getByText(/listar bilhetes/i)).toBeInTheDocument();
+    
+    await waitFor(() => {
+      expect(screen.getByText('GANHADOR 001')).toBeInTheDocument();
+      expect(screen.getByText('GANHADOR 002')).toBeInTheDocument();
+      expect(screen.getByText('A1B2C3D4E5F')).toBeInTheDocument();
     });
   });
 
-  it('deve renderizar a página de listagem', async () => {
+  it('deve aplicar filtros corretamente', async () => {
     renderWithProvider(<ListarBilhetes />);
     
-    expect(screen.getByText(/bilhetes gerados/i)).toBeInTheDocument();
-    
     await waitFor(() => {
-      expect(screen.getByText('GANHADOR-ABC123')).toBeInTheDocument();
-      expect(screen.getByText('GANHADOR-DEF456')).toBeInTheDocument();
-      expect(screen.getByText('PROMO-GHI789')).toBeInTheDocument();
+      expect(screen.getByText('GANHADOR 001')).toBeInTheDocument();
     });
-  });
 
-  it('deve mostrar filtros de busca', () => {
-    renderWithProvider(<ListarBilhetes />);
+    const statusSelect = screen.getByRole('combobox');
+    fireEvent.change(statusSelect, { target: { value: 'GERADO' } });
     
-    expect(screen.getByLabelText(/buscar por código/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/filtrar por status/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/prefixo/i)).toBeInTheDocument();
-  });
-
-  it('deve filtrar bilhetes por código', async () => {
-    renderWithProvider(<ListarBilhetes />);
-    
-    const searchInput = screen.getByLabelText(/buscar por código/i);
-    fireEvent.change(searchInput, { target: { value: 'ABC123' } });
+    const aplicarButton = screen.getByText(/aplicar/i);
+    fireEvent.click(aplicarButton);
     
     await waitFor(() => {
-      expect(bilheteService.currentBilheteService.listarBilhetes).toHaveBeenCalledWith({
-        codigo: 'ABC123',
+      expect(bilheteService.listarBilhetes).toHaveBeenCalledWith({
+        status: 'GERADO'
       });
     });
   });
 
-  it('deve filtrar bilhetes por status', async () => {
-    renderWithProvider(<ListarBilhetes />);
-    
-    const statusSelect = screen.getByLabelText(/filtrar por status/i);
-    fireEvent.change(statusSelect, { target: { value: 'premiado' } });
-    
-    await waitFor(() => {
-      expect(bilheteService.currentBilheteService.listarBilhetes).toHaveBeenCalledWith({
-        status: 'premiado',
-      });
-    });
-  });
-
-  it('deve mostrar informações dos bilhetes na tabela', async () => {
+  it('deve limpar filtros corretamente', async () => {
     renderWithProvider(<ListarBilhetes />);
     
     await waitFor(() => {
-      // Verifica headers da tabela
-      expect(screen.getByText(/número/i)).toBeInTheDocument();
-      expect(screen.getByText(/código/i)).toBeInTheDocument();
-      expect(screen.getByText(/status/i)).toBeInTheDocument();
-      expect(screen.getByText(/data de criação/i)).toBeInTheDocument();
-      
-      // Verifica dados dos bilhetes
-      expect(screen.getByText('000001')).toBeInTheDocument();
-      expect(screen.getByText('000002')).toBeInTheDocument();
-      expect(screen.getByText('000003')).toBeInTheDocument();
+      expect(screen.getByText('GANHADOR 001')).toBeInTheDocument();
     });
-  });
 
-  it('deve mostrar badge diferenciado para cada status', async () => {
-    renderWithProvider(<ListarBilhetes />);
+    const limparButton = screen.getByText(/limpar/i);
+    fireEvent.click(limparButton);
     
     await waitFor(() => {
-      const badges = screen.getAllByTestId(/status-badge/);
-      expect(badges).toHaveLength(3);
+      expect(bilheteService.listarBilhetes).toHaveBeenCalledWith();
     });
   });
 
-  it('deve ter botões de ação para cada bilhete', async () => {
+  it('deve mostrar loading durante carregamento', async () => {
+    let resolvePromise: (value: any) => void;
+    const promise = new Promise<Bilhete[]>(resolve => {
+      resolvePromise = resolve;
+    });
+
+    vi.mocked(bilheteService.listarBilhetes).mockImplementation(() => promise);
+
     renderWithProvider(<ListarBilhetes />);
+    
+    expect(screen.getByText(/carregando bilhetes/i)).toBeInTheDocument();
+    
+    // Resolve a promise
+    resolvePromise!(mockBilhetes);
     
     await waitFor(() => {
-      const pdfButtons = screen.getAllByLabelText(/visualizar pdf/i);
-      expect(pdfButtons.length).toBeGreaterThan(0);
+      expect(screen.getByText('GANHADOR 001')).toBeInTheDocument();
     });
-  });
-
-  it('deve permitir exportar lista de bilhetes', () => {
-    renderWithProvider(<ListarBilhetes />);
-    
-    expect(screen.getByRole('button', { name: /exportar csv/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /exportar pdfs/i })).toBeInTheDocument();
-  });
-
-  it('deve mostrar loading durante carregamento', () => {
-    vi.mocked(bilheteService.currentBilheteService.listarBilhetes).mockImplementation(
-      () => new Promise(resolve => setTimeout(resolve, 1000))
-    );
-
-    renderWithProvider(<ListarBilhetes />);
-    
-    expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
   });
 
   it('deve mostrar mensagem quando não há bilhetes', async () => {
-    vi.mocked(bilheteService.currentBilheteService.listarBilhetes).mockResolvedValue({
-      sucesso: true,
-      dados: [],
-    });
-
+    vi.mocked(bilheteService.listarBilhetes).mockResolvedValue([]);
+    
     renderWithProvider(<ListarBilhetes />);
     
     await waitFor(() => {
@@ -167,23 +140,35 @@ describe('ListarBilhetes Page', () => {
     });
   });
 
-  it('deve aplicar múltiplos filtros', async () => {
+  it('deve permitir download de PDF', async () => {
+    vi.mocked(bilheteService.downloadPdf).mockResolvedValue();
+    
     renderWithProvider(<ListarBilhetes />);
     
-    const searchInput = screen.getByLabelText(/buscar por código/i);
-    const statusSelect = screen.getByLabelText(/filtrar por status/i);
-    const prefixoInput = screen.getByLabelText(/prefixo/i);
-    
-    fireEvent.change(searchInput, { target: { value: 'GANHADOR' } });
-    fireEvent.change(statusSelect, { target: { value: 'ativo' } });
-    fireEvent.change(prefixoInput, { target: { value: 'GANHADOR' } });
+    await waitFor(() => {
+      expect(screen.getByText('GANHADOR 001')).toBeInTheDocument();
+    });
+
+    const downloadButtons = screen.getAllByTitle(/download pdf/i);
+    fireEvent.click(downloadButtons[0]);
     
     await waitFor(() => {
-      expect(bilheteService.currentBilheteService.listarBilhetes).toHaveBeenCalledWith({
-        codigo: 'GANHADOR',
-        status: 'ativo',
-        prefixo: 'GANHADOR',
-      });
+      expect(bilheteService.downloadPdf).toHaveBeenCalledWith('1', 'GANHADOR_001.pdf');
     });
+  });
+
+  it('deve mostrar estatísticas', async () => {
+    renderWithProvider(<ListarBilhetes />);
+    
+    await waitFor(() => {
+      expect(screen.getByText('GANHADOR 001')).toBeInTheDocument();
+    });
+
+    // Verifica se as estatísticas aparecem
+    expect(screen.getByText('2')).toBeInTheDocument(); // Total
+    expect(screen.getByText('Total')).toBeInTheDocument();
+    expect(screen.getByText('Gerados')).toBeInTheDocument();
+    expect(screen.getByText('Premiados')).toBeInTheDocument();
+    expect(screen.getByText('Cancelados')).toBeInTheDocument();
   });
 }); 

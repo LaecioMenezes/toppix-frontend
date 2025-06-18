@@ -2,10 +2,22 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GerarBilhetes } from '../../../pages/admin/GerarBilhetes';
 import { BilheteProvider } from '../../../contexts/BilheteContext';
-import * as bilheteService from '../../../services/bilheteService';
+import { bilheteService } from '../../../services/bilheteService';
 
 // Mock do serviço
-vi.mock('../../../services/bilheteService');
+vi.mock('../../../services/bilheteService', () => ({
+  bilheteService: {
+    gerarLote: vi.fn(),
+    listarBilhetes: vi.fn(),
+    validarBilhete: vi.fn(),
+    downloadPdf: vi.fn(),
+    obterUrlPdf: vi.fn(),
+    formatarDataBrasileira: vi.fn(),
+    obterCorStatus: vi.fn(),
+    obterTextoStatus: vi.fn(),
+    validarFormatoCodigo: vi.fn(),
+  }
+}));
 
 const renderWithProvider = (component: React.ReactElement) => {
   return render(
@@ -26,18 +38,17 @@ describe('GerarBilhetes Page', () => {
     expect(screen.getByText(/gerar bilhetes/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/quantidade/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/prefixo/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /gerar bilhetes/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /gerar lote de bilhetes/i })).toBeInTheDocument();
   });
 
   it('deve validar campos obrigatórios', async () => {
     renderWithProvider(<GerarBilhetes />);
     
-    const submitButton = screen.getByRole('button', { name: /gerar bilhetes/i });
+    const submitButton = screen.getByRole('button', { name: /gerar lote de bilhetes/i });
     fireEvent.click(submitButton);
     
     await waitFor(() => {
-      expect(screen.getByText(/quantidade deve ser pelo menos 1/i)).toBeInTheDocument();
-      expect(screen.getByText(/prefixo é obrigatório/i)).toBeInTheDocument();
+      expect(screen.getByText(/quantidade deve ser entre 1 e 10.000 bilhetes/i)).toBeInTheDocument();
     });
   });
 
@@ -47,52 +58,37 @@ describe('GerarBilhetes Page', () => {
     const quantidadeInput = screen.getByLabelText(/quantidade/i);
     fireEvent.change(quantidadeInput, { target: { value: '0' } });
     
-    const submitButton = screen.getByRole('button', { name: /gerar bilhetes/i });
+    const submitButton = screen.getByRole('button', { name: /gerar lote de bilhetes/i });
     fireEvent.click(submitButton);
     
     await waitFor(() => {
-      expect(screen.getByText(/quantidade deve ser pelo menos 1/i)).toBeInTheDocument();
+      expect(screen.getByText(/quantidade deve ser entre 1 e 10.000 bilhetes/i)).toBeInTheDocument();
     });
   });
 
-  it('deve gerar bilhetes com sucesso', async () => {
+  it('deve gerar lote com sucesso', async () => {
     const mockResponse = {
-      sucesso: true,
-      dados: [
-        {
-          id: 'test-1',
-          numero: '000001',
-          codigo: 'PROMOCAO-ABC123',
-          prefixo: 'PROMOCAO',
-          status: 'ativo' as const,
-          dataCriacao: new Date(),
-        },
-        {
-          id: 'test-2',
-          numero: '000002',
-          codigo: 'PROMOCAO-DEF456',
-          prefixo: 'PROMOCAO',
-          status: 'ativo' as const,
-          dataCriacao: new Date(),
-        },
-      ],
-      mensagem: '2 bilhetes gerados com sucesso!'
+      quantidade: 2,
+      prefixo: 'GANHADOR',
+      primeiroNumero: 1,
+      ultimoNumero: 2,
+      createdAt: new Date().toISOString()
     };
 
-    vi.mocked(bilheteService.currentBilheteService.gerarBilhetes).mockResolvedValue(mockResponse);
+    vi.mocked(bilheteService.gerarLote).mockResolvedValue(mockResponse);
 
     renderWithProvider(<GerarBilhetes />);
     
     const quantidadeInput = screen.getByLabelText(/quantidade/i);
     const prefixoInput = screen.getByLabelText(/prefixo/i);
-    const submitButton = screen.getByRole('button', { name: /gerar bilhetes/i });
+    const submitButton = screen.getByRole('button', { name: /gerar lote de bilhetes/i });
     
     fireEvent.change(quantidadeInput, { target: { value: '2' } });
-    fireEvent.change(prefixoInput, { target: { value: 'PROMOCAO' } });
+    fireEvent.change(prefixoInput, { target: { value: 'GANHADOR' } });
     fireEvent.click(submitButton);
     
     await waitFor(() => {
-      expect(screen.getByText(/bilhetes foram gerados com sucesso/i)).toBeInTheDocument();
+      expect(screen.getByText(/lote gerado com sucesso/i)).toBeInTheDocument();
     });
   });
 
@@ -102,13 +98,13 @@ describe('GerarBilhetes Page', () => {
       resolvePromise = resolve;
     });
 
-    vi.mocked(bilheteService.currentBilheteService.gerarBilhetes).mockReturnValue(promise);
+    vi.mocked(bilheteService.gerarLote).mockReturnValue(promise);
 
     renderWithProvider(<GerarBilhetes />);
     
     const quantidadeInput = screen.getByLabelText(/quantidade/i);
     const prefixoInput = screen.getByLabelText(/prefixo/i);
-    const submitButton = screen.getByRole('button', { name: /gerar bilhetes/i });
+    const submitButton = screen.getByRole('button', { name: /gerar lote de bilhetes/i });
     
     fireEvent.change(quantidadeInput, { target: { value: '10' } });
     fireEvent.change(prefixoInput, { target: { value: 'GANHADOR' } });
@@ -116,27 +112,47 @@ describe('GerarBilhetes Page', () => {
     
     // Verifica se o loading aparece
     await waitFor(() => {
-      expect(screen.getByTestId('loading-spinner')).toBeInTheDocument();
+      expect(screen.getByText(/gerando bilhetes/i)).toBeInTheDocument();
       expect(submitButton).toBeDisabled();
     });
 
     // Resolve a promise para terminar o teste
     resolvePromise!({
-      sucesso: true,
-      dados: [],
-      mensagem: 'Sucesso!'
+      quantidade: 10,
+      prefixo: 'GANHADOR',
+      primeiroNumero: 1,
+      ultimoNumero: 10,
+      createdAt: new Date().toISOString()
     });
   });
 
-  it('deve permitir definir valor do prêmio', () => {
+  it('deve validar formato do prefixo', async () => {
     renderWithProvider(<GerarBilhetes />);
     
-    expect(screen.getByLabelText(/valor do prêmio/i)).toBeInTheDocument();
+    const quantidadeInput = screen.getByLabelText(/quantidade/i);
+    const prefixoInput = screen.getByLabelText(/prefixo/i);
+    const submitButton = screen.getByRole('button', { name: /gerar lote de bilhetes/i });
+    
+    fireEvent.change(quantidadeInput, { target: { value: '5' } });
+    fireEvent.change(prefixoInput, { target: { value: 'prefixo-inválido' } });
+    fireEvent.click(submitButton);
+    
+    await waitFor(() => {
+      expect(screen.getByText(/prefixo deve conter apenas letras maiúsculas, números e espaços/i)).toBeInTheDocument();
+    });
   });
 
-  it('deve permitir definir data de expiração', () => {
+  it('deve mostrar preview dos bilhetes', () => {
     renderWithProvider(<GerarBilhetes />);
     
-    expect(screen.getByLabelText(/data de expiração/i)).toBeInTheDocument();
+    const quantidadeInput = screen.getByLabelText(/quantidade/i);
+    const prefixoInput = screen.getByLabelText(/prefixo/i);
+    
+    fireEvent.change(quantidadeInput, { target: { value: '3' } });
+    fireEvent.change(prefixoInput, { target: { value: 'TESTE' } });
+    
+    expect(screen.getByText(/preview dos bilhetes/i)).toBeInTheDocument();
+    expect(screen.getByText('TESTE 001')).toBeInTheDocument();
+    expect(screen.getByText('TESTE 003')).toBeInTheDocument();
   });
 }); 

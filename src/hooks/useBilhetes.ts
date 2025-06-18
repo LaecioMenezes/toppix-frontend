@@ -1,36 +1,31 @@
 import { useCallback } from 'react';
 import { useBilhete } from '../contexts/BilheteContext';
-import { currentBilheteService } from '../services/bilheteService';
+import { bilheteService } from '../services/bilheteService';
 import type { 
-  GerarBilhetesRequest, 
+  GerarLoteRequest,
   ValidarBilheteRequest, 
   FiltrosBilhetes,
-  ExportarBilhetesRequest 
+  ExportarBilhetesRequest
 } from '../types';
 
 export function useBilhetes() {
   const { state, actions } = useBilhete();
 
-  // Gerar bilhetes
-  const gerarBilhetes = useCallback(async (dados: GerarBilhetesRequest) => {
+  // Gerar lote de bilhetes (nova API)
+  const gerarLote = useCallback(async (dados: GerarLoteRequest) => {
     actions.setLoading(true);
     actions.setError(null);
 
     try {
-      const response = await currentBilheteService.gerarBilhetes(dados);
+      const response = await bilheteService.gerarLote(dados);
       
-      if (response.sucesso && response.dados) {
-        actions.addBilhetes(response.dados);
-        return {
-          sucesso: true,
-          mensagem: response.mensagem || 'Bilhetes gerados com sucesso!',
-          dados: response.dados
-        };
-      } else {
-        throw new Error(response.mensagem || 'Erro ao gerar bilhetes');
-      }
+      return {
+        sucesso: true,
+        mensagem: `✅ Lote gerado com sucesso! ${response.quantidade} bilhetes criados com prefixo "${response.prefixo}"`,
+        dados: response
+      };
     } catch (error) {
-      const mensagem = error instanceof Error ? error.message : 'Erro desconhecido';
+      const mensagem = error instanceof Error ? error.message : 'Erro ao gerar lote de bilhetes';
       actions.setError(mensagem);
       return {
         sucesso: false,
@@ -42,26 +37,23 @@ export function useBilhetes() {
     }
   }, [actions]);
 
-  // Listar bilhetes
+  // Listar bilhetes (nova API)
   const listarBilhetes = useCallback(async (filtros?: FiltrosBilhetes) => {
     actions.setLoading(true);
     actions.setError(null);
 
     try {
-      const response = await currentBilheteService.listarBilhetes(filtros);
+      const bilhetes = await bilheteService.listarBilhetes(filtros);
       
-      if (response.sucesso && response.dados) {
-        actions.setBilhetes(response.dados);
-        actions.setFiltros(filtros || {});
-        return {
-          sucesso: true,
-          dados: response.dados
-        };
-      } else {
-        throw new Error(response.mensagem || 'Erro ao listar bilhetes');
-      }
+      actions.setBilhetes(bilhetes);
+      actions.setFiltros(filtros || {});
+      
+      return {
+        sucesso: true,
+        dados: bilhetes
+      };
     } catch (error) {
-      const mensagem = error instanceof Error ? error.message : 'Erro desconhecido';
+      const mensagem = error instanceof Error ? error.message : 'Erro ao listar bilhetes';
       actions.setError(mensagem);
       return {
         sucesso: false,
@@ -73,13 +65,13 @@ export function useBilhetes() {
     }
   }, [actions]);
 
-  // Validar bilhete
+  // Validar bilhete (nova API)
   const validarBilhete = useCallback(async (dados: ValidarBilheteRequest) => {
     actions.setLoading(true);
     actions.setError(null);
 
     try {
-      const resultado = await currentBilheteService.validarBilhete(dados);
+      const resultado = await bilheteService.validarBilhete(dados.codigo);
       
       // Se o bilhete foi validado com sucesso, atualiza o estado
       if (resultado.valido && resultado.bilhete) {
@@ -88,7 +80,7 @@ export function useBilhetes() {
       
       return resultado;
     } catch (error) {
-      const mensagem = error instanceof Error ? error.message : 'Erro desconhecido';
+      const mensagem = error instanceof Error ? error.message : 'Erro ao validar bilhete';
       actions.setError(mensagem);
       return {
         valido: false,
@@ -100,28 +92,87 @@ export function useBilhetes() {
     }
   }, [actions]);
 
-  // Exportar bilhetes
+  // Download PDF
+  const downloadPdf = useCallback(async (bilheteId: string, nomeArquivo?: string) => {
+    actions.setLoading(true);
+    actions.setError(null);
+
+    try {
+      await bilheteService.downloadPdf(bilheteId, nomeArquivo);
+      
+      return {
+        sucesso: true,
+        mensagem: 'PDF baixado com sucesso!'
+      };
+    } catch (error) {
+      const mensagem = error instanceof Error ? error.message : 'Erro ao baixar PDF';
+      actions.setError(mensagem);
+      return {
+        sucesso: false,
+        mensagem
+      };
+    } finally {
+      actions.setLoading(false);
+    }
+  }, [actions]);
+
+  // Obter URL do PDF
+  const obterUrlPdf = useCallback(async (bilheteId: string) => {
+    actions.setLoading(true);
+    actions.setError(null);
+
+    try {
+      const response = await bilheteService.obterUrlPdf(bilheteId);
+      
+      // Abrir URL em nova aba
+      window.open(response.url, '_blank');
+      
+      return {
+        sucesso: true,
+        mensagem: 'PDF aberto com sucesso!',
+        dados: response
+      };
+    } catch (error) {
+      const mensagem = error instanceof Error ? error.message : 'Erro ao obter URL do PDF';
+      actions.setError(mensagem);
+      return {
+        sucesso: false,
+        mensagem
+      };
+    } finally {
+      actions.setLoading(false);
+    }
+  }, [actions]);
+
+  // Exportar bilhetes (manter compatibilidade)
   const exportarBilhetes = useCallback(async (dados: ExportarBilhetesRequest) => {
     actions.setLoading(true);
     actions.setError(null);
 
     try {
-      const blob = await currentBilheteService.exportarBilhetes(dados);
+      // Por enquanto, vamos simular a exportação usando a listagem
+      const bilhetes = await bilheteService.listarBilhetes(dados.filtros);
       
-      // Criar URL para download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      
-      const nomeArquivo = dados.formato === 'csv' 
-        ? `bilhetes_${new Date().toISOString().split('T')[0]}.csv`
-        : `bilhetes_${new Date().toISOString().split('T')[0]}.zip`;
-      
-      link.download = nomeArquivo;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      if (dados.formato === 'csv') {
+        // Gerar CSV simples
+        const csvHeader = 'ID,Numero,Codigo,Status,Criado em\n';
+        const csvContent = bilhetes.map(bilhete => 
+          `${bilhete.id},"${bilhete.numeroSequencial}","${bilhete.codigoUnico}","${bilhete.status}","${bilheteService.formatarDataBrasileira(bilhete.createdAt)}"`
+        ).join('\n');
+        
+        const csvData = csvHeader + csvContent;
+        const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+        
+        // Criar URL para download
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `bilhetes_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
 
       return {
         sucesso: true,
@@ -139,38 +190,33 @@ export function useBilhetes() {
     }
   }, [actions]);
 
-  // Visualizar PDF
+  // Visualizar PDF (compatibilidade)
   const visualizarPDF = useCallback(async (id: string) => {
-    actions.setLoading(true);
-    actions.setError(null);
+    return obterUrlPdf(id);
+  }, [obterUrlPdf]);
 
+  // Obter estatísticas
+  const obterEstatisticas = useCallback(async () => {
     try {
-      const blob = await currentBilheteService.visualizarPDF(id);
-      
-      // Abrir PDF em nova aba
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      
-      // Limpar URL depois de um tempo
-      setTimeout(() => {
-        window.URL.revokeObjectURL(url);
-      }, 100);
-
+      const estatisticas = await bilheteService.obterEstatisticas();
       return {
         sucesso: true,
-        mensagem: 'PDF aberto com sucesso!'
+        dados: estatisticas
       };
     } catch (error) {
-      const mensagem = error instanceof Error ? error.message : 'Erro ao visualizar PDF';
-      actions.setError(mensagem);
+      const mensagem = error instanceof Error ? error.message : 'Erro ao obter estatísticas';
       return {
         sucesso: false,
-        mensagem
+        mensagem,
+        dados: {
+          total: 0,
+          gerados: 0,
+          premiados: 0,
+          cancelados: 0
+        }
       };
-    } finally {
-      actions.setLoading(false);
     }
-  }, [actions]);
+  }, []);
 
   // Atualizar filtros
   const atualizarFiltros = useCallback((filtros: FiltrosBilhetes) => {
@@ -190,13 +236,21 @@ export function useBilhetes() {
     erro: state.erro,
     total: state.total,
     
-    // Ações
-    gerarBilhetes,
+    // Ações da nova API
+    gerarLote,
     listarBilhetes,
     validarBilhete,
+    downloadPdf,
+    obterUrlPdf,
+    obterEstatisticas,
+    
+    // Ações de compatibilidade
     exportarBilhetes,
     visualizarPDF,
     atualizarFiltros,
     limparEstado,
+    
+    // Métodos de compatibilidade (mapeados para nova API)
+    gerarBilhetes: gerarLote, // Para compatibilidade com código antigo
   };
 } 

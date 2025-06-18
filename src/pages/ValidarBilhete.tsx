@@ -1,794 +1,635 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { QrCode, Gift, AlertCircle, CheckCircle2, Scan, User, Phone, Mail, CreditCard } from 'lucide-react';
-import { useBilhetes } from '../hooks/useBilhetes';
+import { useNavigate } from 'react-router-dom';
+import { bilheteService } from '../services/bilheteService';
 import type { ValidarBilheteResponse } from '../types';
 import logoJayna from '../assets/images/logotipo-jayna-icone.png';
 
-// Schema de validação para o bilhete
-const validarBilheteSchema = z.object({
-  codigo: z.string().min(1, 'Código é obrigatório'),
-});
-
-// Schema de validação para os dados do ganhador
-const dadosGanhadorSchema = z.object({
-  nomeCompleto: z.string().min(2, 'Nome completo é obrigatório'),
-  telefone: z.string().min(10, 'Telefone deve ter pelo menos 10 dígitos'),
-  email: z.string().email('Email deve ser válido'),
-  chavePix: z.string().min(1, 'Chave PIX é obrigatória'),
-});
-
-type ValidarBilheteForm = z.infer<typeof validarBilheteSchema>;
-type DadosGanhadorForm = z.infer<typeof dadosGanhadorSchema>;
-
 export function ValidarBilhete() {
+  const [codigo, setCodigo] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [resultado, setResultado] = useState<ValidarBilheteResponse | null>(null);
-  const [mostrarQRScanner, setMostrarQRScanner] = useState(false);
-  const [mostrarFormularioGanhador, setMostrarFormularioGanhador] = useState(false);
-  const [dadosEnviados, setDadosEnviados] = useState(false);
-  const [enviandoDados, setEnviandoDados] = useState(false);
-  const { validarBilhete, carregando } = useBilhetes();
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<ValidarBilheteForm>({
-    resolver: zodResolver(validarBilheteSchema),
+  const [mostrarFormularioContato, setMostrarFormularioContato] = useState(false);
+  const [dadosContato, setDadosContato] = useState({
+    nome: '',
+    telefone: '',
+    email: '',
+    chavePix: ''
   });
+  const [enviandoContato, setEnviandoContato] = useState(false);
+  const navigate = useNavigate();
 
-  const {
-    register: registerGanhador,
-    handleSubmit: handleSubmitGanhador,
-    formState: { errors: errorsGanhador },
-    reset: resetGanhador,
-  } = useForm<DadosGanhadorForm>({
-    resolver: zodResolver(dadosGanhadorSchema),
-  });
-
-  const onSubmit = async (data: ValidarBilheteForm) => {
-    const response = await validarBilhete(data);
-    setResultado(response);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    // Se for um bilhete premiado, mostrar formulário de dados
-    if (response.tipo === 'sucesso' && response.bilhete?.valor) {
-      setMostrarFormularioGanhador(true);
+    if (!codigo.trim()) {
+      setResultado({
+        valido: false,
+        mensagem: 'Digite um código para validar',
+        tipo: 'erro'
+      });
+      return;
+    }
+
+    if (!bilheteService.validarFormatoCodigo(codigo.trim())) {
+      setResultado({
+        valido: false,
+        mensagem: 'Código deve ter pelo menos 3 caracteres',
+        tipo: 'erro'
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setResultado(null);
+    setMostrarFormularioContato(false);
+
+    try {
+      const response = await bilheteService.validarBilhete(codigo.trim().toUpperCase());
+      setResultado(response);
+      
+      // Se bilhete for válido, mostrar formulário automaticamente
+      if (response.valido) {
+        setMostrarFormularioContato(true);
+      }
+    } catch (error) {
+      setResultado({
+        valido: false,
+        mensagem: 'Erro de conexão. Tente novamente.',
+        tipo: 'erro'
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const onSubmitDadosGanhador = async (data: DadosGanhadorForm) => {
-    setEnviandoDados(true);
+  const limparResultado = () => {
+    setResultado(null);
+    setCodigo('');
+    setMostrarFormularioContato(false);
+    setDadosContato({
+      nome: '',
+      telefone: '',
+      email: '',
+      chavePix: ''
+    });
+  };
+
+  const handleEnviarContato = async (e: React.FormEvent) => {
+    e.preventDefault();
     
+    // Validações básicas
+    if (!dadosContato.nome.trim() || !dadosContato.telefone.trim() || !dadosContato.email.trim() || !dadosContato.chavePix.trim()) {
+      alert('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    // Validação específica do telefone
+    const telefoneFormatado = dadosContato.telefone.trim();
+    if (!telefoneFormatado.match(/^\([0-9]{2}\) [0-9]{4,5}-[0-9]{4}$/)) {
+      alert('Telefone deve estar no formato (XX) XXXXX-XXXX. Digite apenas os números que a formatação será aplicada automaticamente.');
+      return;
+    }
+
+    if (!resultado?.bilhete?.codigoUnico) {
+      alert('Erro: código do bilhete não encontrado.');
+      return;
+    }
+
+    setEnviandoContato(true);
+
     try {
-      // Simular envio dos dados (aqui você faria a chamada para a API)
-      console.log('Dados do ganhador:', {
-        bilhete: resultado?.bilhete,
-        dadosGanhador: data
+      const dadosResgate = {
+        codigo: resultado.bilhete.codigoUnico,
+        nomeCompleto: dadosContato.nome.trim(),
+        telefone: telefoneFormatado,
+        email: dadosContato.email.trim(),
+        chavePix: dadosContato.chavePix.trim()
+      };
+
+      const response = await bilheteService.processarResgate(dadosResgate);
+      
+      alert(`${response.mensagem}\n\nData do resgate: ${new Date(response.dataResgate).toLocaleString('pt-BR')}`);
+      setMostrarFormularioContato(false);
+      
+      // Atualizar o resultado com o bilhete atualizado
+      setResultado({
+        valido: true,
+        bilhete: response.bilhete,
+        mensagem: 'Bilhete resgatado com sucesso!',
+        tipo: 'sucesso'
       });
       
-      // Simular delay da API
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      setDadosEnviados(true);
-      setMostrarFormularioGanhador(false);
     } catch (error) {
-      console.error('Erro ao enviar dados:', error);
+      const mensagemErro = error instanceof Error ? error.message : 'Erro ao processar resgate. Tente novamente.';
+      alert(mensagemErro);
     } finally {
-      setEnviandoDados(false);
+      setEnviandoContato(false);
     }
   };
 
-  const handleNovaValidacao = () => {
-    setResultado(null);
-    setMostrarFormularioGanhador(false);
-    setDadosEnviados(false);
-    reset();
-    resetGanhador();
+  const handleInputContato = (campo: string, valor: string) => {
+    let valorFormatado = valor;
+    
+    // Aplicar máscara de telefone automaticamente
+    if (campo === 'telefone') {
+      valorFormatado = formatarTelefone(valor);
+    }
+    
+    setDadosContato(prev => ({
+      ...prev,
+      [campo]: valorFormatado
+    }));
   };
 
-  const formatarValor = (valor: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(valor);
+  const formatarTelefone = (valor: string): string => {
+    // Remove tudo que não é número
+    const apenasNumeros = valor.replace(/\D/g, '');
+    
+    // Aplica a máscara baseado no tamanho
+    if (apenasNumeros.length <= 2) {
+      return apenasNumeros;
+    } else if (apenasNumeros.length <= 3) {
+      return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2)}`;
+    } else if (apenasNumeros.length <= 7) {
+      return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}`;
+    } else if (apenasNumeros.length <= 11) {
+      // Telefone com 9 dígitos: (XX) XXXXX-XXXX
+      return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7, 11)}`;
+    } else {
+      // Limita a 11 dígitos
+      return `(${apenasNumeros.slice(0, 2)}) ${apenasNumeros.slice(2, 7)}-${apenasNumeros.slice(7, 11)}`;
+    }
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #eff6ff 0%, #f1f5f9 100%)', 
-      padding: '16px',
-      fontFamily: 'Arial, sans-serif'
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      <div style={{ 
-        maxWidth: '448px', 
-        margin: '0 auto', 
-        paddingTop: '32px' 
+      <div style={{
+        width: '100%',
+        maxWidth: '480px',
+        background: 'white',
+        borderRadius: '24px',
+        padding: '40px',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.1)',
+        textAlign: 'center'
       }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+        
+        {/* Logo e Título */}
+        <div style={{ marginBottom: '32px' }}>
           <div style={{
             width: '80px',
             height: '80px',
-            margin: '0 auto 16px',
-            backgroundColor: 'white',
-            borderRadius: '16px',
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            borderRadius: '20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            border: '2px solid rgba(255, 255, 255, 0.8)'
+            margin: '0 auto 24px',
+            padding: '16px'
           }}>
-            <img 
-              src={logoJayna} 
-              alt="Jayna Logo" 
-              style={{ 
-                width: '48px', 
+            <img
+              src={logoJayna}
+              alt="Jayna"
+              style={{
+                width: '48px',
                 height: '48px',
-                objectFit: 'contain'
-              }} 
+                objectFit: 'contain',
+                filter: 'brightness(0) invert(1)'
+              }}
             />
           </div>
-          <h1 style={{ 
-            fontSize: '30px', 
-            fontWeight: 'bold', 
-            color: '#1f2937', 
-            marginBottom: '8px' 
+          
+          <h1 style={{
+            fontSize: '28px',
+            fontWeight: '700',
+            color: '#1a1a1a',
+            margin: '0 0 8px 0',
+            letterSpacing: '-0.5px'
           }}>
-            Top Pix - Validar Bilhete
+            Top Pix
           </h1>
-          <p style={{ color: '#6b7280' }}>
-            Digite o código ou escaneie o QR Code do seu bilhete Top Pix
+          
+          <p style={{
+            fontSize: '16px',
+            color: '#666',
+            margin: '0',
+            lineHeight: '1.5'
+          }}>
+            Digite o código do seu bilhete para verificar se é premiado
           </p>
         </div>
 
-        {!resultado ? (
-          /* Formulário de Validação */
-          <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '16px',
-            padding: '32px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            marginBottom: '24px'
-          }}>
-            <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: '600',
-                  color: '#374151',
-                  fontSize: '14px'
-                }}>
-                  Código do Bilhete
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type="text"
-                    placeholder="Ex: GANHADOR-ABC123"
-                    style={{
-                      width: '100%',
-                      padding: '16px 16px 16px 48px',
-                      border: '2px solid #d1d5db',
-                      borderRadius: '12px',
-                      fontSize: '16px',
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                      backgroundColor: 'white'
-                    }}
-                    {...register('codigo')}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
-                  />
-                  <QrCode style={{
-                    position: 'absolute',
-                    left: '16px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '20px',
-                    height: '20px',
-                    color: '#6b7280'
-                  }} />
-                </div>
-                {errors.codigo && (
-                  <p style={{
-                    color: '#ef4444',
-                    fontSize: '14px',
-                    marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    <AlertCircle style={{ width: '16px', height: '16px' }} />
-                    {errors.codigo.message}
-                  </p>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <button
-                  type="submit"
-                  disabled={carregando}
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    backgroundColor: carregando ? '#9ca3af' : '#3b82f6',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '12px',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    cursor: carregando ? 'not-allowed' : 'pointer',
-                    transition: 'background-color 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                  onMouseOver={(e) => {
-                    if (!carregando) e.currentTarget.style.backgroundColor = '#2563eb';
-                  }}
-                  onMouseOut={(e) => {
-                    if (!carregando) e.currentTarget.style.backgroundColor = '#3b82f6';
-                  }}
-                >
-                  {carregando ? (
-                    <>
-                      <div style={{
-                        width: '20px',
-                        height: '20px',
-                        border: '2px solid rgba(255, 255, 255, 0.3)',
-                        borderTop: '2px solid white',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                      }} />
-                      Validando...
-                    </>
-                  ) : (
-                    'Validar'
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMostrarQRScanner(true)}
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    backgroundColor: '#f3f4f6',
-                    color: '#374151',
-                    border: 'none',
-                    borderRadius: '12px',
-                    fontSize: '16px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e5e7eb'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
-                >
-                  <Scan size={20} />
-                  Escanear QR Code
-                </button>
-              </div>
-            </form>
+        {/* Formulário */}
+        <form onSubmit={handleSubmit} style={{ marginBottom: '32px' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <input
+              type="text"
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value.toUpperCase())}
+              placeholder="Ex: A1B2C3D4E5F"
+              disabled={isLoading}
+              maxLength={20}
+              autoComplete="off"
+              style={{
+                width: '100%',
+                padding: '16px 20px',
+                fontSize: '18px',
+                fontFamily: 'monospace',
+                letterSpacing: '2px',
+                textAlign: 'center',
+                border: '2px solid #e5e7eb',
+                borderRadius: '16px',
+                outline: 'none',
+                transition: 'all 0.2s ease',
+                background: isLoading ? '#f9fafb' : 'white',
+                color: '#1a1a1a',
+                fontWeight: '600'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#667eea';
+                e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#e5e7eb';
+                e.target.style.boxShadow = 'none';
+              }}
+            />
           </div>
-        ) : (
-          /* Resultado da Validação */
-          <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '16px',
-            padding: '32px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            textAlign: 'center',
-            marginBottom: '24px'
-          }}>
-            {resultado.tipo === 'sucesso' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          <button
+            type="submit"
+            disabled={isLoading || !codigo.trim()}
+            style={{
+              width: '100%',
+              padding: '16px 24px',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: 'white',
+              background: isLoading || !codigo.trim() 
+                ? '#9ca3af' 
+                : 'linear-gradient(135deg, #667eea, #764ba2)',
+              border: 'none',
+              borderRadius: '16px',
+              cursor: isLoading || !codigo.trim() ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+            onMouseOver={(e) => {
+              if (!isLoading && codigo.trim()) {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.3)';
+              }
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            {isLoading ? (
+              <>
                 <div style={{
-                  width: '80px',
-                  height: '80px',
-                  margin: '0 auto',
-                  backgroundColor: '#22c55e',
+                  width: '20px',
+                  height: '20px',
+                  border: '2px solid rgba(255, 255, 255, 0.3)',
+                  borderTop: '2px solid white',
                   borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Gift style={{ width: '40px', height: '40px', color: 'white' }} />
-                </div>
-                <div>
-                  <h2 style={{ 
-                    fontSize: '24px', 
-                    fontWeight: 'bold', 
-                    color: '#16a34a', 
-                    marginBottom: '8px' 
-                  }}>
-                    🎉 Parabéns!
-                  </h2>
-                  <p style={{ color: '#374151', marginBottom: '16px' }}>
-                    {resultado.mensagem}
-                  </p>
-                  {resultado.bilhete?.valor && (
-                    <div style={{
-                      backgroundColor: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
-                      borderRadius: '12px',
-                      padding: '16px'
-                    }}>
-                      <p style={{ 
-                        fontSize: '30px', 
-                        fontWeight: 'bold', 
-                        color: '#16a34a',
-                        margin: 0
-                      }}>
-                        {formatarValor(resultado.bilhete.valor)}
-                      </p>
-                      <p style={{ 
-                        fontSize: '14px', 
-                        color: '#16a34a', 
-                        marginTop: '4px',
-                        margin: 0
-                      }}>
-                        Valor do prêmio
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {resultado.tipo === 'aviso' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  margin: '0 auto',
-                  backgroundColor: '#eab308',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <CheckCircle2 style={{ width: '40px', height: '40px', color: 'white' }} />
-                </div>
-                <div>
-                  <h2 style={{ 
-                    fontSize: '24px', 
-                    fontWeight: 'bold', 
-                    color: '#ca8a04', 
-                    marginBottom: '8px' 
-                  }}>
-                    Bilhete Válido
-                  </h2>
-                  <p style={{ color: '#374151' }}>
-                    {resultado.mensagem}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {resultado.tipo === 'erro' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{
-                  width: '80px',
-                  height: '80px',
-                  margin: '0 auto',
-                  backgroundColor: '#ef4444',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <AlertCircle style={{ width: '40px', height: '40px', color: 'white' }} />
-                </div>
-                <div>
-                  <h2 style={{ 
-                    fontSize: '24px', 
-                    fontWeight: 'bold', 
-                    color: '#dc2626', 
-                    marginBottom: '8px' 
-                  }}>
-                    Bilhete Inválido
-                  </h2>
-                  <p style={{ color: '#374151' }}>
-                    {resultado.mensagem}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Informações do bilhete */}
-            {resultado.bilhete && (
-              <div style={{
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '12px',
-                padding: '16px',
-                textAlign: 'left',
-                marginTop: '16px'
-              }}>
-                <h3 style={{ 
-                  fontWeight: '600', 
-                  color: '#1f2937', 
-                  marginBottom: '12px',
-                  margin: '0 0 12px 0'
-                }}>
-                  Detalhes do Bilhete
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>Número:</span>
-                    <span style={{ fontWeight: '500' }}>{resultado.bilhete.numero}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>Código:</span>
-                    <span style={{ fontWeight: '500' }}>{resultado.bilhete.codigo}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>Status:</span>
-                    <span style={{ 
-                      fontWeight: '500', 
-                      textTransform: 'capitalize',
-                      color: resultado.bilhete.status === 'premiado' ? '#16a34a' : 
-                            resultado.bilhete.status === 'ativo' ? '#ca8a04' : '#6b7280'
-                    }}>
-                      {resultado.bilhete.status}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>Criado em:</span>
-                    <span style={{ fontWeight: '500' }}>
-                      {resultado.bilhete.dataCriacao.toLocaleDateString('pt-BR')}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Mostrar confirmação se dados foram enviados */}
-            {dadosEnviados && (
-              <div style={{
-                backgroundColor: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: '12px',
-                padding: '16px',
-                marginTop: '16px',
-                textAlign: 'center'
-              }}>
-                <CheckCircle2 style={{ 
-                  width: '32px', 
-                  height: '32px', 
-                  color: '#16a34a', 
-                  margin: '0 auto 8px' 
+                  animation: 'spin 1s linear infinite'
                 }} />
-                <p style={{ 
-                  color: '#16a34a', 
-                  fontWeight: 'bold', 
-                  margin: 0 
+                Validando...
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '18px' }}>🔍</span>
+                Validar Bilhete
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Resultado */}
+        {resultado && (
+          <div style={{
+            padding: '24px',
+            borderRadius: '16px',
+            marginBottom: '24px',
+            background: resultado.valido 
+              ? 'linear-gradient(135deg, #d4f5d4, #a7f3d0)' 
+              : 'linear-gradient(135deg, #fecaca, #fca5a5)',
+            border: `2px solid ${resultado.valido ? '#10b981' : '#ef4444'}`,
+            animation: 'fadeIn 0.3s ease-in-out'
+          }}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '16px'
+            }}>
+              {resultado.valido ? '🎉' : '❌'}
+            </div>
+            
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '700',
+              color: resultado.valido ? '#065f46' : '#991b1b',
+              margin: '0 0 8px 0'
+            }}>
+              {resultado.valido ? 'Bilhete Válido!' : 'Bilhete Inválido'}
+            </h3>
+            
+            <p style={{
+              fontSize: '16px',
+              color: resultado.valido ? '#047857' : '#b91c1c',
+              margin: '0 0 16px 0',
+              lineHeight: '1.5'
+            }}>
+              {resultado.mensagem}
+            </p>
+
+            {/* Detalhes do bilhete válido */}
+            {resultado.valido && resultado.bilhete && (
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.9)',
+                borderRadius: '12px',
+                padding: '20px',
+                marginTop: '16px',
+                textAlign: 'left'
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: '16px'
                 }}>
-                  ✅ Dados enviados com sucesso!
-                </p>
-                <p style={{ 
-                  color: '#6b7280', 
-                  fontSize: '14px', 
-                  margin: '4px 0 0 0' 
-                }}>
-                  Entraremos em contato em breve para processar seu prêmio.
-                </p>
+                  <div>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#666',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px'
+                    }}>
+                      Código
+                    </span>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: '700',
+                      fontFamily: 'monospace',
+                      color: '#1a1a1a',
+                      marginTop: '4px'
+                    }}>
+                      {resultado.bilhete.codigoUnico}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#666',
+                      textTransform: 'uppercase',
+                      letterSpacing: '1px'
+                    }}>
+                      Status
+                    </span>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: resultado.bilhete.status === 'PREMIADO' ? '#f59e0b' : '#10b981',
+                      marginTop: '4px',
+                      textTransform: 'capitalize'
+                    }}>
+                      {bilheteService.obterTextoStatus(resultado.bilhete.status)}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            {/* Botão para nova validação - só aparece se não estiver mostrando formulário */}
-            {!mostrarFormularioGanhador && (
-              <button
-                onClick={handleNovaValidacao}
-                style={{
-                  width: '100%',
-                  padding: '16px',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.2s',
-                  marginTop: '24px'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
-              >
-                Validar Novo Bilhete
-              </button>
-            )}
+            <button
+              onClick={limparResultado}
+              style={{
+                marginTop: '16px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#666',
+                background: 'white',
+                border: '2px solid #e5e7eb',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#666';
+              }}
+            >
+              Validar Outro Bilhete
+            </button>
           </div>
         )}
 
-        {/* Formulário de Dados do Ganhador */}
-        {mostrarFormularioGanhador && (
+        {/* Formulário de Contato para Bilhetes Válidos */}
+        {mostrarFormularioContato && resultado?.valido && (
           <div style={{
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(10px)',
+            padding: '24px',
+            background: 'linear-gradient(135deg, #f0f9ff, #e0f2fe)',
+            border: '2px solid #0ea5e9',
             borderRadius: '16px',
-            padding: '32px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
-            marginBottom: '24px'
+            marginBottom: '24px',
+            animation: 'fadeIn 0.3s ease-in-out'
           }}>
-            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-              <User style={{ 
-                width: '48px', 
-                height: '48px', 
-                margin: '0 auto 16px', 
-                color: '#16a34a' 
-              }} />
-              <h3 style={{ 
-                fontSize: '24px', 
-                fontWeight: 'bold', 
-                color: '#1f2937', 
-                marginBottom: '8px',
-                margin: '0 0 8px 0'
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '700',
+              color: '#0c4a6e',
+              margin: '0 0 16px 0',
+              textAlign: 'center'
+            }}>
+              📝 Dados para Participação
+            </h3>
+            
+            <form onSubmit={handleEnviarContato}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '16px',
+                marginBottom: '20px'
               }}>
-                Dados do Ganhador
-              </h3>
-              <p style={{ color: '#6b7280', margin: 0 }}>
-                Preencha seus dados para receber o prêmio via PIX
-              </p>
-            </div>
-
-            <form onSubmit={handleSubmitGanhador(onSubmitDadosGanhador)} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {/* Nome Completo */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: '600',
-                  color: '#374151',
-                  fontSize: '14px'
-                }}>
-                  Nome Completo *
-                </label>
-                <div style={{ position: 'relative' }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#0c4a6e',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px'
+                  }}>
+                    Nome Completo *
+                  </label>
                   <input
                     type="text"
-                    placeholder="Digite seu nome completo"
+                    value={dadosContato.nome}
+                    onChange={(e) => handleInputContato('nome', e.target.value)}
+                    required
                     style={{
                       width: '100%',
-                      padding: '12px 12px 12px 44px',
-                      border: '2px solid #d1d5db',
+                      padding: '12px',
+                      fontSize: '14px',
+                      border: '2px solid #e0f2fe',
                       borderRadius: '8px',
-                      fontSize: '16px',
                       outline: 'none',
-                      transition: 'border-color 0.2s',
-                      backgroundColor: 'white'
+                      transition: 'border-color 0.2s ease'
                     }}
-                    {...registerGanhador('nomeCompleto')}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => e.target.style.borderColor = '#0ea5e9'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0f2fe'}
                   />
-                  <User style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '20px',
-                    height: '20px',
-                    color: '#6b7280'
-                  }} />
                 </div>
-                {errorsGanhador.nomeCompleto && (
-                  <p style={{
-                    color: '#ef4444',
-                    fontSize: '14px',
-                    marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
+                
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#0c4a6e',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px'
                   }}>
-                    <AlertCircle style={{ width: '16px', height: '16px' }} />
-                    {errorsGanhador.nomeCompleto.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Telefone */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: '600',
-                  color: '#374151',
-                  fontSize: '14px'
-                }}>
-                  Telefone *
-                </label>
-                <div style={{ position: 'relative' }}>
+                    Telefone *
+                  </label>
                   <input
                     type="tel"
-                    placeholder="(11) 99999-9999"
+                    value={dadosContato.telefone}
+                    onChange={(e) => handleInputContato('telefone', e.target.value)}
+                    required
+                    placeholder="Digite apenas números: 11999999999"
+                    maxLength={15}
                     style={{
                       width: '100%',
-                      padding: '12px 12px 12px 44px',
-                      border: '2px solid #d1d5db',
+                      padding: '12px',
+                      fontSize: '14px',
+                      border: '2px solid #e0f2fe',
                       borderRadius: '8px',
-                      fontSize: '16px',
                       outline: 'none',
-                      transition: 'border-color 0.2s',
-                      backgroundColor: 'white'
+                      transition: 'border-color 0.2s ease'
                     }}
-                    {...registerGanhador('telefone')}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => e.target.style.borderColor = '#0ea5e9'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0f2fe'}
                   />
-                  <Phone style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '20px',
-                    height: '20px',
-                    color: '#6b7280'
-                  }} />
-                </div>
-                {errorsGanhador.telefone && (
-                  <p style={{
-                    color: '#ef4444',
-                    fontSize: '14px',
+                  <div style={{
+                    fontSize: '11px',
+                    color: '#64748b',
                     marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
+                    fontStyle: 'italic'
                   }}>
-                    <AlertCircle style={{ width: '16px', height: '16px' }} />
-                    {errorsGanhador.telefone.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Email */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: '600',
-                  color: '#374151',
-                  fontSize: '14px'
-                }}>
-                  Email *
-                </label>
-                <div style={{ position: 'relative' }}>
+                    Formatação automática: (XX) XXXXX-XXXX
+                  </div>
+                </div>
+                
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#0c4a6e',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px'
+                  }}>
+                    Email *
+                  </label>
                   <input
                     type="email"
+                    value={dadosContato.email}
+                    onChange={(e) => handleInputContato('email', e.target.value)}
+                    required
                     placeholder="seu@email.com"
                     style={{
                       width: '100%',
-                      padding: '12px 12px 12px 44px',
-                      border: '2px solid #d1d5db',
+                      padding: '12px',
+                      fontSize: '14px',
+                      border: '2px solid #e0f2fe',
                       borderRadius: '8px',
-                      fontSize: '16px',
                       outline: 'none',
-                      transition: 'border-color 0.2s',
-                      backgroundColor: 'white'
+                      transition: 'border-color 0.2s ease'
                     }}
-                    {...registerGanhador('email')}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => e.target.style.borderColor = '#0ea5e9'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0f2fe'}
                   />
-                  <Mail style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '20px',
-                    height: '20px',
-                    color: '#6b7280'
-                  }} />
                 </div>
-                {errorsGanhador.email && (
-                  <p style={{
-                    color: '#ef4444',
-                    fontSize: '14px',
-                    marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
+                
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#0c4a6e',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px'
                   }}>
-                    <AlertCircle style={{ width: '16px', height: '16px' }} />
-                    {errorsGanhador.email.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Chave PIX */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: '600',
-                  color: '#374151',
-                  fontSize: '14px'
-                }}>
-                  Chave PIX *
-                </label>
-                <div style={{ position: 'relative' }}>
+                    Chave PIX *
+                  </label>
                   <input
                     type="text"
-                    placeholder="CPF, telefone, email ou chave aleatória"
+                    value={dadosContato.chavePix}
+                    onChange={(e) => handleInputContato('chavePix', e.target.value)}
+                    required
+                    placeholder="CPF, E-mail, Telefone ou Chave Aleatória"
                     style={{
                       width: '100%',
-                      padding: '12px 12px 12px 44px',
-                      border: '2px solid #d1d5db',
+                      padding: '12px',
+                      fontSize: '14px',
+                      border: '2px solid #e0f2fe',
                       borderRadius: '8px',
-                      fontSize: '16px',
                       outline: 'none',
-                      transition: 'border-color 0.2s',
-                      backgroundColor: 'white'
+                      transition: 'border-color 0.2s ease'
                     }}
-                    {...registerGanhador('chavePix')}
-                    onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                    onFocus={(e) => e.target.style.borderColor = '#0ea5e9'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0f2fe'}
                   />
-                  <CreditCard style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    width: '20px',
-                    height: '20px',
-                    color: '#6b7280'
-                  }} />
                 </div>
-                {errorsGanhador.chavePix && (
-                  <p style={{
-                    color: '#ef4444',
-                    fontSize: '14px',
-                    marginTop: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    <AlertCircle style={{ width: '16px', height: '16px' }} />
-                    {errorsGanhador.chavePix.message}
-                  </p>
-                )}
               </div>
-
-              {/* Botões */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'center'
+              }}>
                 <button
                   type="button"
-                  onClick={() => setMostrarFormularioGanhador(false)}
-                  disabled={enviandoDados}
+                  onClick={() => setMostrarFormularioContato(false)}
                   style={{
-                    flex: 1,
-                    padding: '16px',
-                    backgroundColor: '#6b7280',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '12px',
-                    fontSize: '16px',
+                    padding: '12px 20px',
+                    fontSize: '14px',
                     fontWeight: '600',
-                    cursor: enviandoDados ? 'not-allowed' : 'pointer',
-                    transition: 'background-color 0.2s',
-                    opacity: enviandoDados ? 0.5 : 1
+                    color: '#64748b',
+                    background: 'white',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
                   }}
                   onMouseOver={(e) => {
-                    if (!enviandoDados) e.currentTarget.style.backgroundColor = '#4b5563';
+                    e.currentTarget.style.borderColor = '#94a3b8';
+                    e.currentTarget.style.color = '#475569';
                   }}
                   onMouseOut={(e) => {
-                    if (!enviandoDados) e.currentTarget.style.backgroundColor = '#6b7280';
+                    e.currentTarget.style.borderColor = '#e2e8f0';
+                    e.currentTarget.style.color = '#64748b';
                   }}
                 >
                   Cancelar
@@ -796,35 +637,39 @@ export function ValidarBilhete() {
                 
                 <button
                   type="submit"
-                  disabled={enviandoDados}
+                  disabled={enviandoContato}
                   style={{
-                    flex: 2,
-                    padding: '16px',
-                    backgroundColor: enviandoDados ? '#9ca3af' : '#16a34a',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '12px',
-                    fontSize: '16px',
+                    padding: '12px 20px',
+                    fontSize: '14px',
                     fontWeight: '600',
-                    cursor: enviandoDados ? 'not-allowed' : 'pointer',
-                    transition: 'background-color 0.2s',
+                    color: 'white',
+                    background: enviandoContato 
+                      ? '#94a3b8' 
+                      : 'linear-gradient(135deg, #0ea5e9, #0284c7)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: enviandoContato ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s ease',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
                     gap: '8px'
                   }}
                   onMouseOver={(e) => {
-                    if (!enviandoDados) e.currentTarget.style.backgroundColor = '#15803d';
+                    if (!enviandoContato) {
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(14, 165, 233, 0.3)';
+                    }
                   }}
                   onMouseOut={(e) => {
-                    if (!enviandoDados) e.currentTarget.style.backgroundColor = '#16a34a';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
                   }}
                 >
-                  {enviandoDados ? (
+                  {enviandoContato ? (
                     <>
                       <div style={{
-                        width: '20px',
-                        height: '20px',
+                        width: '16px',
+                        height: '16px',
                         border: '2px solid rgba(255, 255, 255, 0.3)',
                         borderTop: '2px solid white',
                         borderRadius: '50%',
@@ -833,65 +678,90 @@ export function ValidarBilhete() {
                       Enviando...
                     </>
                   ) : (
-                    'Enviar Dados'
+                    <>
+                      ✅ Enviar Dados
+                    </>
                   )}
                 </button>
               </div>
             </form>
+            
+            <p style={{
+              fontSize: '12px',
+              color: '#64748b',
+              textAlign: 'center',
+              margin: '16px 0 0 0',
+              lineHeight: '1.5'
+            }}>
+              * Campos obrigatórios. Seus dados serão utilizados para contato sobre a promoção.
+            </p>
           </div>
         )}
 
-        {/* Scanner QR (placeholder) */}
-        {mostrarQRScanner && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
+        {/* Informações de Contato */}
+        <div style={{
+          padding: '20px',
+          background: '#f8fafc',
+          borderRadius: '16px',
+          marginBottom: '24px'
+        }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#1a1a1a',
+            margin: '0 0 12px 0'
           }}>
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '16px',
-              padding: '32px',
-              textAlign: 'center',
-              maxWidth: '400px',
-              margin: '16px'
-            }}>
-              <h3 style={{ marginBottom: '16px', color: '#1f2937' }}>
-                Scanner QR Code
-              </h3>
-              <p style={{ marginBottom: '24px', color: '#6b7280' }}>
-                Funcionalidade de scanner será implementada em breve
-              </p>
-              <button
-                onClick={() => setMostrarQRScanner(false)}
-                style={{
-                  padding: '12px 24px',
-                  backgroundColor: '#3b82f6',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer'
-                }}
-              >
-                Fechar
-              </button>
-            </div>
+            🏆 Bilhete Premiado?
+          </h3>
+          <p style={{
+            fontSize: '14px',
+            color: '#666',
+            margin: '0 0 12px 0',
+            lineHeight: '1.5'
+          }}>
+            Entre em contato para resgatar seu prêmio:
+          </p>
+          <div style={{
+            fontSize: '14px',
+            color: '#666',
+            lineHeight: '1.6'
+          }}>
+            <div>📞 (11) 99999-9999</div>
+            <div>📧 premios@jayna.com.br</div>
+            <div>🕒 Segunda a Sexta, 9h às 18h</div>
           </div>
-        )}
+        </div>
+
+        {/* Link para Admin */}
+        <button
+          onClick={() => navigate('/login')}
+          style={{
+            fontSize: '12px',
+            color: '#9ca3af',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            transition: 'color 0.2s ease'
+          }}
+          onMouseOver={(e) => e.currentTarget.style.color = '#667eea'}
+          onMouseOut={(e) => e.currentTarget.style.color = '#9ca3af'}
+        >
+          Área Administrativa
+        </button>
       </div>
 
+      {/* CSS para animações */}
       <style>
         {`
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+          }
+          
+          @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(10px); }
+            100% { opacity: 1; transform: translateY(0); }
           }
         `}
       </style>

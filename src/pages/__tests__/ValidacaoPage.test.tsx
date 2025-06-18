@@ -2,10 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ValidarBilhete } from '../ValidarBilhete';
-import * as bilheteService from '../../services/bilheteService';
+import { bilheteService } from '../../services/bilheteService';
 
 // Mock do serviço
-vi.mock('../../services/bilheteService');
+vi.mock('../../services/bilheteService', () => ({
+  bilheteService: {
+    gerarLote: vi.fn(),
+    listarBilhetes: vi.fn(),
+    validarBilhete: vi.fn(),
+    downloadPdf: vi.fn(),
+    obterUrlPdf: vi.fn(),
+    formatarDataBrasileira: vi.fn().mockReturnValue('01/01/2024 10:30'),
+    obterCorStatus: vi.fn().mockReturnValue('bg-blue-100 text-blue-800'),
+    obterTextoStatus: vi.fn().mockReturnValue('Gerado'),
+    validarFormatoCodigo: vi.fn().mockReturnValue(true),
+  }
+}));
 
 const renderWithRouter = (ui: React.ReactElement) => {
   return render(
@@ -23,9 +35,8 @@ describe('ValidarBilhete', () => {
   it('deve renderizar campos de entrada', () => {
     const { getByPlaceholderText, getByText } = renderWithRouter(<ValidarBilhete />);
 
-    expect(getByPlaceholderText('Ex: GANHADOR-ABC123')).toBeInTheDocument();
-    expect(getByText('Validar Bilhete')).toBeInTheDocument();
-    expect(getByText('Escanear QR Code')).toBeInTheDocument();
+    expect(getByPlaceholderText(/digite o código do bilhete/i)).toBeInTheDocument();
+    expect(getByText(/validar bilhete/i)).toBeInTheDocument();
   });
 
   it('deve validar código digitado corretamente', async () => {
@@ -33,33 +44,36 @@ describe('ValidarBilhete', () => {
       valido: true,
       bilhete: {
         id: '1',
-        numero: '000001',
-        codigo: 'GANHADOR123',
-        prefixo: 'GANHADOR',
-        status: 'ativo' as const,
-        valor: 100,
-        dataCriacao: new Date(),
-        dataExpiracao: new Date(),
+        numeroSequencial: 'GANHADOR 001',
+        codigoUnico: 'A1B2C3D4E5F',
+        qrCodeRef: 'qr-ref-1',
+        pdfUrl: undefined,
+        status: 'PREMIADO' as const,
+        createdAt: '2024-01-01T10:30:00Z',
+        updatedAt: '2024-01-01T12:00:00Z',
+        dataResgate: '2024-01-01T12:00:00Z',
+        usuarioId: 'user-1',
+        usuario: undefined
       },
-      mensagem: 'Parabéns! Você ganhou R$ 100,00!',
+      mensagem: 'Parabéns! Você ganhou!',
       tipo: 'sucesso' as const,
     };
 
-    vi.mocked(bilheteService.bilheteService.validarBilhete).mockResolvedValueOnce(mockValidacao);
+    vi.mocked(bilheteService.validarBilhete).mockResolvedValueOnce(mockValidacao);
 
-    const { getByPlaceholderText, getByText, getByTestId } = renderWithRouter(<ValidarBilhete />);
+    const { getByPlaceholderText, getByText } = renderWithRouter(<ValidarBilhete />);
 
-    const input = getByPlaceholderText('Ex: GANHADOR-ABC123');
-    const button = getByText('Validar Bilhete');
+    const input = getByPlaceholderText(/digite o código do bilhete/i);
+    const button = getByText(/validar bilhete/i);
 
-    fireEvent.change(input, { target: { value: 'GANHADOR123' } });
+    fireEvent.change(input, { target: { value: 'A1B2C3D4E5F' } });
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(getByTestId('resultado-validacao')).toBeInTheDocument();
+      expect(getByText(/bilhete válido!/i)).toBeInTheDocument();
     });
 
-    expect(getByText('Parabéns! Você ganhou R$ 100,00!')).toBeInTheDocument();
+    expect(getByText(/parabéns! você ganhou!/i)).toBeInTheDocument();
   });
 
   it('deve mostrar erro para código inválido', async () => {
@@ -69,25 +83,25 @@ describe('ValidarBilhete', () => {
       tipo: 'erro' as const,
     };
 
-    vi.mocked(bilheteService.bilheteService.validarBilhete).mockResolvedValueOnce(mockValidacao);
+    vi.mocked(bilheteService.validarBilhete).mockResolvedValueOnce(mockValidacao);
 
-    const { getByPlaceholderText, getByText, getByTestId } = renderWithRouter(<ValidarBilhete />);
+    const { getByPlaceholderText, getByText } = renderWithRouter(<ValidarBilhete />);
 
-    const input = getByPlaceholderText('Ex: GANHADOR-ABC123');
-    const button = getByText('Validar Bilhete');
+    const input = getByPlaceholderText(/digite o código do bilhete/i);
+    const button = getByText(/validar bilhete/i);
 
     fireEvent.change(input, { target: { value: 'INVALIDO123' } });
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(getByTestId('resultado-validacao')).toBeInTheDocument();
+      expect(getByText(/bilhete inválido/i)).toBeInTheDocument();
     });
 
     expect(getByText('Código não encontrado ou inválido')).toBeInTheDocument();
   });
 
   it('deve desabilitar botão durante validação', async () => {
-    vi.mocked(bilheteService.bilheteService.validarBilhete).mockImplementation(
+    vi.mocked(bilheteService.validarBilhete).mockImplementation(
       () => new Promise(resolve => setTimeout(() => resolve({
         valido: true,
         mensagem: 'Sucesso',
@@ -97,8 +111,8 @@ describe('ValidarBilhete', () => {
 
     const { getByPlaceholderText, getByText } = renderWithRouter(<ValidarBilhete />);
 
-    const input = getByPlaceholderText('Ex: GANHADOR-ABC123');
-    const button = getByText('Validar Bilhete');
+    const input = getByPlaceholderText(/digite o código do bilhete/i);
+    const button = getByText(/validar bilhete/i);
 
     fireEvent.change(input, { target: { value: 'TESTE123' } });
     fireEvent.click(button);

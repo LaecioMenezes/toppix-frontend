@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Plus, Menu, X, Settings, BarChart3, Sparkles, Home } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Plus, Menu, X, Settings, BarChart3, Sparkles, Home, LogOut } from 'lucide-react';
+import { apiService } from '../../services/apiService';
 import logoJayna from '../../assets/images/logotipo-jayna-icone.png';
 
 export function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Detectar largura da tela
   useEffect(() => {
@@ -291,16 +293,47 @@ export function AdminLayout() {
                 }}>
                   <Settings size={18} style={{ color: 'white' }} />
                 </div>
-                <div>
+                <div style={{ flex: 1 }}>
                   <p style={{ fontWeight: '500', color: '#1f2937', margin: 0 }}>Administrador</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>Top Pix v1.0</p>
                 </div>
               </div>
-              <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <div style={{ width: '8px', height: '8px', backgroundColor: '#22c55e', borderRadius: '50%' }}></div>
-                  <span>Sistema Online</span>
-                </span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ width: '8px', height: '8px', backgroundColor: '#22c55e', borderRadius: '50%' }}></div>
+                    <span>Sistema Online</span>
+                  </span>
+                </div>
+                
+                {/* Botão de Logout */}
+                <button
+                  onClick={() => {
+                    apiService.logout();
+                    navigate('/login', { replace: true });
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: '#ef4444',
+                    color: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ef4444'}
+                  title="Sair do sistema"
+                >
+                  <LogOut size={12} />
+                  Sair
+                </button>
               </div>
             </div>
           </div>

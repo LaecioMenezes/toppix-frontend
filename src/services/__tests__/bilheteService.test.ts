@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { bilheteService } from '../bilheteService';
-import type { GerarBilhetesRequest, FiltrosBilhetes } from '../../types';
+import type { GerarLoteRequest, FiltrosBilhetes } from '../../types';
 
 // Mock do fetch global
 const mockFetch = vi.fn();
@@ -11,28 +11,19 @@ describe('BilheteService', () => {
     vi.clearAllMocks();
   });
 
-  describe('gerarBilhetes', () => {
-    it('deve gerar bilhetes com os parâmetros corretos', async () => {
-      const parametros: GerarBilhetesRequest = {
+  describe('gerarLote', () => {
+    it('deve gerar lote de bilhetes com os parâmetros corretos', async () => {
+      const parametros: GerarLoteRequest = {
         quantidade: 10,
-        prefixo: 'GANHADOR',
-        valor: 50,
-        dataExpiracao: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        prefixo: 'GANHADOR'
       };
 
       const mockResponse = {
-        sucesso: true,
-        dados: Array.from({ length: 10 }, (_, i) => ({
-          id: `bilhete-${i}`,
-          numero: `${i + 1}`.padStart(6, '0'),
-          codigo: `GANHADOR-${Math.random().toString(36).toUpperCase().substring(2, 8)}`,
-          prefixo: 'GANHADOR',
-          status: 'ativo',
-          valor: 50,
-          dataCriacao: new Date(),
-          dataExpiracao: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        })),
-        mensagem: '10 bilhetes gerados com sucesso!'
+        quantidade: 10,
+        prefixo: 'GANHADOR',
+        primeiroNumero: 1,
+        ultimoNumero: 10,
+        createdAt: new Date().toISOString()
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -40,9 +31,9 @@ describe('BilheteService', () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const resultado = await bilheteService.gerarBilhetes(parametros);
+      const resultado = await bilheteService.gerarLote(parametros);
 
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:3001/api/bilhetes/gerar', {
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/api/bilhetes/gerar-lote', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -50,12 +41,12 @@ describe('BilheteService', () => {
         body: JSON.stringify(parametros),
       });
 
-      expect(resultado.dados).toHaveLength(10);
-      expect(resultado.dados?.[0].prefixo).toBe('GANHADOR');
+      expect(resultado.quantidade).toBe(10);
+      expect(resultado.prefixo).toBe('GANHADOR');
     });
 
     it('deve lançar erro quando a API falhar', async () => {
-      const parametros: GerarBilhetesRequest = {
+      const parametros: GerarLoteRequest = {
         quantidade: 5,
         prefixo: 'TESTE'
       };
@@ -63,36 +54,36 @@ describe('BilheteService', () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 400,
-        json: () => Promise.resolve({ mensagem: 'Parâmetros inválidos' }),
+        json: () => Promise.resolve({ message: 'Parâmetros inválidos' }),
       });
 
-      await expect(bilheteService.gerarBilhetes(parametros)).rejects.toThrow('Parâmetros inválidos');
+      await expect(bilheteService.gerarLote(parametros)).rejects.toThrow('Parâmetros inválidos');
     });
   });
 
   describe('listarBilhetes', () => {
     it('deve listar bilhetes com filtros aplicados', async () => {
       const filtros: FiltrosBilhetes = {
-        status: 'ativo',
-        prefixo: 'GANHADOR'
+        status: 'GERADO',
+        dataInicio: '2024-01-01',
+        dataFim: '2024-01-31'
       };
 
-      const mockResponse = {
-        sucesso: true,
-        dados: [
-          {
-            id: 'bilhete-1',
-            numero: '000001',
-            codigo: 'GANHADOR-ABC123',
-            prefixo: 'GANHADOR',
-            status: 'ativo',
-            valor: 50,
-            dataCriacao: new Date(),
-            dataExpiracao: new Date()
-          }
-        ],
-        mensagem: 'Bilhetes encontrados'
-      };
+      const mockResponse = [
+        {
+          id: 'bilhete-1',
+          numeroSequencial: 'GANHADOR 001',
+          codigoUnico: 'A1B2C3D4E5F',
+          qrCodeRef: 'qr-ref-1',
+          pdfUrl: undefined,
+          status: 'GERADO',
+          createdAt: '2024-01-01T10:30:00Z',
+          updatedAt: '2024-01-01T10:30:00Z',
+          dataResgate: undefined,
+          usuarioId: 'user-1',
+          usuario: undefined
+        }
+      ];
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -101,31 +92,31 @@ describe('BilheteService', () => {
 
       const resultado = await bilheteService.listarBilhetes(filtros);
 
-      expect(resultado.dados).toHaveLength(1);
-      expect(resultado.dados?.[0].status).toBe('ativo');
+      expect(resultado).toHaveLength(1);
+      expect(resultado[0].status).toBe('GERADO');
     });
   });
 
   describe('validarBilhete', () => {
     it('deve validar código premiado corretamente', async () => {
-      const dados = { codigo: 'GANHADOR123' };
+      const codigo = 'A1B2C3D4E5F';
       const mockResponse = {
-        sucesso: true,
-        dados: {
-          valido: true,
-          bilhete: {
-            id: 'bilhete-1',
-            numero: '000001',
-            codigo: 'GANHADOR123',
-            prefixo: 'GANHADOR',
-            status: 'ativo',
-            valor: 100,
-            dataCriacao: new Date(),
-            dataExpiracao: new Date()
-          },
-          mensagem: 'Parabéns! Você ganhou R$ 100,00!',
-          tipo: 'sucesso'
-        }
+        valido: true,
+        bilhete: {
+          id: 'bilhete-1',
+          numeroSequencial: 'GANHADOR 001',
+          codigoUnico: 'A1B2C3D4E5F',
+          qrCodeRef: 'qr-ref-1',
+          pdfUrl: undefined,
+          status: 'PREMIADO',
+          createdAt: '2024-01-01T10:30:00Z',
+          updatedAt: '2024-01-01T12:00:00Z',
+          dataResgate: '2024-01-01T12:00:00Z',
+          usuarioId: 'user-1',
+          usuario: undefined
+        },
+        mensagem: 'Parabéns! Você ganhou!',
+        tipo: 'sucesso'
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -133,22 +124,19 @@ describe('BilheteService', () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const resultado = await bilheteService.validarBilhete(dados);
+      const resultado = await bilheteService.validarBilhete(codigo);
 
       expect(resultado.valido).toBe(true);
-      expect(resultado.bilhete?.valor).toBe(100);
+      expect(resultado.bilhete?.status).toBe('PREMIADO');
       expect(resultado.tipo).toBe('sucesso');
     });
 
     it('deve retornar erro para código inválido', async () => {
-      const dados = { codigo: 'INVALIDO123' };
+      const codigo = 'INVALIDO123';
       const mockResponse = {
-        sucesso: false,
-        dados: {
-          valido: false,
-          mensagem: 'Código não encontrado ou inválido',
-          tipo: 'erro'
-        }
+        valido: false,
+        mensagem: 'Código não encontrado ou inválido',
+        tipo: 'erro'
       };
 
       mockFetch.mockResolvedValueOnce({
@@ -156,10 +144,31 @@ describe('BilheteService', () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const resultado = await bilheteService.validarBilhete(dados);
+      const resultado = await bilheteService.validarBilhete(codigo);
 
       expect(resultado.valido).toBe(false);
       expect(resultado.tipo).toBe('erro');
+    });
+  });
+
+  describe('formatarDataBrasileira', () => {
+    it('deve formatar data ISO para formato brasileiro', () => {
+      const dataISO = '2024-01-15T10:30:00Z';
+      const resultado = bilheteService.formatarDataBrasileira(dataISO);
+      
+      expect(resultado).toMatch(/15\/01\/2024/);
+    });
+  });
+
+  describe('validarFormatoCodigo', () => {
+    it('deve validar códigos válidos', () => {
+      expect(bilheteService.validarFormatoCodigo('A1B2C3')).toBe(true);
+      expect(bilheteService.validarFormatoCodigo('GANHADOR123')).toBe(true);
+    });
+
+    it('deve rejeitar códigos inválidos', () => {
+      expect(bilheteService.validarFormatoCodigo('AB')).toBe(false);
+      expect(bilheteService.validarFormatoCodigo('')).toBe(false);
     });
   });
 }); 
