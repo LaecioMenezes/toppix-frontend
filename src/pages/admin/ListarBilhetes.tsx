@@ -19,6 +19,12 @@ export function ListarBilhetes() {
   const [paginaAtual, setPaginaAtual] = useState<number>(1);
   const [itensPorPagina, setItensPorPagina] = useState<number>(10);
 
+  // Estados para marcar como pago
+  const [modalPagoAberto, setModalPagoAberto] = useState(false);
+  const [bilheteSelecionado, setBilheteSelecionado] = useState<Bilhete | null>(null);
+  const [observacoesPagamento, setObservacoesPagamento] = useState('');
+  const [isLoadingPagamento, setIsLoadingPagamento] = useState(false);
+
   // Carregar bilhetes na inicialização
   useEffect(() => {
     carregarBilhetes();
@@ -92,16 +98,6 @@ export function ListarBilhetes() {
     }
   };
 
-  const obterUrlPdf = async (bilhete: Bilhete) => {
-    try {
-      const response = await bilheteService.obterUrlPdf(bilhete.id);
-      window.open(response.url, '_blank');
-    } catch (error) {
-      console.error('Erro ao obter URL do PDF:', error);
-      alert('Erro ao obter URL do PDF');
-    }
-  };
-
   const formatarData = (dataISO: string): string => {
     return bilheteService.formatarDataBrasileira(dataISO);
   };
@@ -123,12 +119,51 @@ export function ListarBilhetes() {
     }
   };
 
+  const abrirModalPagamento = (bilhete: Bilhete) => {
+    setBilheteSelecionado(bilhete);
+    setObservacoesPagamento('');
+    setModalPagoAberto(true);
+  };
+
+  const fecharModalPagamento = () => {
+    setModalPagoAberto(false);
+    setBilheteSelecionado(null);
+    setObservacoesPagamento('');
+  };
+
+  const confirmarPagamento = async () => {
+    if (!bilheteSelecionado) return;
+
+    setIsLoadingPagamento(true);
+    
+    try {
+      await bilheteService.marcarComoPago(
+        bilheteSelecionado.id,
+        observacoesPagamento.trim() || undefined
+      );
+      
+      // Recarregar bilhetes para atualizar a lista
+      await carregarBilhetes(filtros, paginaAtual);
+      
+      fecharModalPagamento();
+      
+      // Feedback visual
+    } catch (error) {
+      console.error('Erro ao marcar bilhete como pago:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao marcar bilhete como pago');
+    } finally {
+      setIsLoadingPagamento(false);
+    }
+  };
+
   const obterCorStatus = (status: string) => {
     switch (status) {
       case 'GERADO':
         return { bg: '#dbeafe', color: '#1d4ed8', border: '#60a5fa' };
       case 'PREMIADO':
         return { bg: '#dcfce7', color: '#166534', border: '#4ade80' };
+      case 'PAGO':
+        return { bg: '#f3e8ff', color: '#7c3aed', border: '#a78bfa' };
       case 'CANCELADO':
         return { bg: '#fee2e2', color: '#dc2626', border: '#f87171' };
       default:
@@ -140,6 +175,7 @@ export function ListarBilhetes() {
     total: paginacao?.totalItens || 0,
     gerados: bilhetes.filter(b => b.status === 'GERADO').length,
     premiados: bilhetes.filter(b => b.status === 'PREMIADO').length,
+    pagos: bilhetes.filter(b => b.status === 'PAGO').length,
     cancelados: bilhetes.filter(b => b.status === 'CANCELADO').length,
   };
 
@@ -314,6 +350,42 @@ export function ListarBilhetes() {
             <div style={{
               fontSize: '36px',
               fontWeight: '800',
+              color: '#7c3aed',
+              marginBottom: '8px'
+            }}>
+              {estatisticas.pagos}
+            </div>
+            <div style={{
+              fontSize: '14px',
+              color: '#64748b',
+              fontWeight: '500',
+              textTransform: 'uppercase',
+              letterSpacing: '1px'
+            }}>
+              Pagos
+            </div>
+          </div>
+
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #e2e8f0',
+            textAlign: 'center',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 8px 25px -5px rgba(0, 0, 0, 0.1)';
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+          }}>
+            <div style={{
+              fontSize: '36px',
+              fontWeight: '800',
               color: '#ef4444',
               marginBottom: '8px'
             }}>
@@ -397,6 +469,7 @@ export function ListarBilhetes() {
                 <option value="">Todos os status</option>
                 <option value="GERADO">Gerado</option>
                 <option value="PREMIADO">Premiado</option>
+                <option value="PAGO">Pago</option>
                 <option value="CANCELADO">Cancelado</option>
               </select>
             </div>
@@ -614,7 +687,11 @@ export function ListarBilhetes() {
               alignItems: 'center',
               gap: '12px'
             }}>
-              <span style={{ fontSize: '24px' }}>⚠️</span>
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
               <span style={{
                 fontSize: '14px',
                 color: '#991b1b',
@@ -871,37 +948,58 @@ export function ListarBilhetes() {
                             animation: 'spin 1s linear infinite'
                           }} />
                         ) : (
-                          '📄'
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14,2 14,8 20,8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10,9 9,9 8,9"/>
+                          </svg>
                         )}
                       </button>
                       
                       <button
-                        onClick={() => obterUrlPdf(bilhete)}
-                        title="Abrir PDF em nova aba"
+                        onClick={() => abrirModalPagamento(bilhete)}
+                        title="Marcar como pago"
+                        disabled={bilhete.status !== 'PREMIADO'}
                         style={{
                           width: '36px',
                           height: '36px',
                           borderRadius: '8px',
                           border: 'none',
-                          background: '#dcfce7',
-                          color: '#166534',
-                          cursor: 'pointer',
+                          background: bilhete.status === 'PREMIADO' 
+                            ? '#dcfce7' 
+                            : '#f3f4f6',
+                          color: bilhete.status === 'PREMIADO' 
+                            ? '#166534' 
+                            : '#9ca3af',
+                          cursor: bilhete.status === 'PREMIADO' 
+                            ? 'pointer' 
+                            : 'not-allowed',
                           transition: 'all 0.2s ease',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '16px'
+                          fontSize: '14px',
+                          opacity: bilhete.status === 'PREMIADO' ? 1 : 0.5
                         }}
                         onMouseOver={(e) => {
-                          e.currentTarget.style.backgroundColor = '#bbf7d0';
-                          e.currentTarget.style.transform = 'scale(1.05)';
+                          if (bilhete.status === 'PREMIADO') {
+                            e.currentTarget.style.backgroundColor = '#bbf7d0';
+                            e.currentTarget.style.transform = 'scale(1.05)';
+                          }
                         }}
                         onMouseOut={(e) => {
-                          e.currentTarget.style.backgroundColor = '#dcfce7';
-                          e.currentTarget.style.transform = 'scale(1)';
+                          if (bilhete.status === 'PREMIADO') {
+                            e.currentTarget.style.backgroundColor = '#dcfce7';
+                            e.currentTarget.style.transform = 'scale(1)';
+                          }
                         }}
                       >
-                        🔗
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="1" x2="12" y2="23"/>
+                          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
                       </button>
                       
                       <button
@@ -919,7 +1017,7 @@ export function ListarBilhetes() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '16px'
+                          fontSize: '14px'
                         }}
                         onMouseOver={(e) => {
                           e.currentTarget.style.backgroundColor = '#e5e7eb';
@@ -930,7 +1028,10 @@ export function ListarBilhetes() {
                           e.currentTarget.style.transform = 'scale(1)';
                         }}
                       >
-                        📋
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -1129,6 +1230,434 @@ export function ListarBilhetes() {
            </div>
          )}
        </div>
+
+      {/* Modal de Marcar como Pago */}
+      {modalPagoAberto && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          animation: 'fadeIn 0.3s ease-in-out'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '20px',
+            padding: '32px',
+            width: '100%',
+            maxWidth: '500px',
+            margin: '20px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            animation: 'fadeIn 0.3s ease-in-out'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '24px'
+            }}>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: '700',
+                color: '#1e293b',
+                margin: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="1" x2="12" y2="23"/>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                </svg>
+                Marcar como Pago
+              </h3>
+              
+              <button
+                onClick={fecharModalPagamento}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#f3f4f6',
+                  color: '#6b7280',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '18px',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f3f4f6';
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {bilheteSelecionado && (
+              <div style={{
+                background: '#f8fafc',
+                borderRadius: '12px',
+                padding: '20px',
+                marginBottom: '24px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                  </svg>
+                  Informações do Bilhete
+                </div>
+
+                {/* Grid de informações */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {/* Código do Bilhete */}
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#64748b',
+                      fontWeight: '500',
+                      marginBottom: '4px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      Código Único
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#1e293b',
+                      fontFamily: 'monospace',
+                      background: 'white',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      {bilheteSelecionado.codigoUnico}
+                    </div>
+                  </div>
+
+                  {/* Status */}
+                  <div>
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#64748b',
+                      fontWeight: '500',
+                      marginBottom: '4px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      Status
+                    </div>
+                    <div>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        borderRadius: '20px',
+                        backgroundColor: obterCorStatus(bilheteSelecionado.status).bg,
+                        color: obterCorStatus(bilheteSelecionado.status).color,
+                        border: `1px solid ${obterCorStatus(bilheteSelecionado.status).border}`
+                      }}>
+                        {bilheteService.obterTextoStatus(bilheteSelecionado.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informações de Resgate (se disponíveis) */}
+                {bilheteSelecionado.nomeCompleto && (
+                  <div style={{
+                    marginTop: '20px',
+                    paddingTop: '16px',
+                    borderTop: '1px solid #e2e8f0'
+                  }}>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#1e293b',
+                      marginBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                      </svg>
+                      Dados do Ganhador
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '12px'
+                    }}>
+                      {/* Nome Completo */}
+                      <div>
+                        <div style={{
+                          fontSize: '11px',
+                          color: '#64748b',
+                          fontWeight: '500',
+                          marginBottom: '2px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Nome Completo
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#1e293b',
+                          fontWeight: '500'
+                        }}>
+                          {bilheteSelecionado.nomeCompleto}
+                        </div>
+                      </div>
+
+                      {/* Telefone */}
+                      {bilheteSelecionado.telefone && (
+                        <div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#64748b',
+                            fontWeight: '500',
+                            marginBottom: '2px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Telefone
+                          </div>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#1e293b',
+                            fontWeight: '500'
+                          }}>
+                            {bilheteSelecionado.telefone}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Email */}
+                      {bilheteSelecionado.emailResgate && (
+                        <div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#64748b',
+                            fontWeight: '500',
+                            marginBottom: '2px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Email
+                          </div>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#1e293b',
+                            fontWeight: '500',
+                            wordBreak: 'break-all'
+                          }}>
+                            {bilheteSelecionado.emailResgate}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Chave PIX */}
+                      {bilheteSelecionado.chavePix && (
+                        <div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#64748b',
+                            fontWeight: '500',
+                            marginBottom: '2px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.5px'
+                          }}>
+                            Chave PIX
+                          </div>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#1e293b',
+                            fontWeight: '500',
+                            fontFamily: 'monospace',
+                            background: 'white',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid #e2e8f0',
+                            wordBreak: 'break-all'
+                          }}>
+                            {bilheteSelecionado.chavePix}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '24px' }}>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '600',
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
+                Observações (opcional)
+              </label>
+              <textarea
+                value={observacoesPagamento}
+                onChange={(e) => setObservacoesPagamento(e.target.value)}
+                placeholder="Pagamento via PIX"
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  fontSize: '14px',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
+                  outline: 'none',
+                  resize: 'vertical',
+                  transition: 'border-color 0.2s ease',
+                  fontFamily: 'inherit'
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = '#7c3aed';
+                  e.target.style.boxShadow = '0 0 0 3px rgba(124, 58, 237, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = '#e5e7eb';
+                  e.target.style.boxShadow = 'none';
+                }}
+              />
+              <div style={{
+                fontSize: '12px',
+                color: '#64748b',
+                marginTop: '6px'
+              }}>
+                Se não preenchido, será usado: "Pagamento via PIX"
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={fecharModalPagamento}
+                disabled={isLoadingPagamento}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#64748b',
+                  background: 'white',
+                  border: '2px solid #e5e7eb',
+                  borderRadius: '12px',
+                  cursor: isLoadingPagamento ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  opacity: isLoadingPagamento ? 0.5 : 1
+                }}
+                onMouseOver={(e) => {
+                  if (!isLoadingPagamento) {
+                    e.currentTarget.style.borderColor = '#94a3b8';
+                    e.currentTarget.style.color = '#475569';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!isLoadingPagamento) {
+                    e.currentTarget.style.borderColor = '#e5e7eb';
+                    e.currentTarget.style.color = '#64748b';
+                  }
+                }}
+              >
+                Cancelar
+              </button>
+              
+              <button
+                onClick={confirmarPagamento}
+                disabled={isLoadingPagamento}
+                style={{
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: 'white',
+                  background: isLoadingPagamento 
+                    ? '#94a3b8' 
+                    : 'linear-gradient(135deg, #7c3aed, #5b21b6)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: isLoadingPagamento ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+                onMouseOver={(e) => {
+                  if (!isLoadingPagamento) {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(124, 58, 237, 0.4)';
+                  }
+                }}
+                onMouseOut={(e) => {
+                  if (!isLoadingPagamento) {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
+                }}
+              >
+                {isLoadingPagamento ? (
+                  <>
+                    <div style={{
+                      width: '16px',
+                      height: '16px',
+                      border: '2px solid rgba(255, 255, 255, 0.3)',
+                      borderTop: '2px solid white',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
+                    }} />
+                    Processando...
+                  </>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20,6 9,17 4,12"/>
+                    </svg>
+                    Confirmar Pagamento
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSS para animações */}
       <style>

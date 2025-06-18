@@ -13,7 +13,9 @@ import type {
   ValidarBilheteRequest,
   ValidarBilheteResponse,
   FormularioResgateRequest,
-  ResgateResponse
+  ResgateResponse,
+  MarcarComoPagoRequest,
+  MarcarComoPagoResponse
 } from '../types';
 
 // Configuração da API
@@ -278,6 +280,22 @@ export const apiService = {
       throw new ApiError('Erro de conexão', 500);
     }
   },
+
+  async marcarComoPago(dados: MarcarComoPagoRequest): Promise<MarcarComoPagoResponse> {
+    try {
+      const response = await apiRequest<MarcarComoPagoResponse>('/bilhetes/marcar-como-pago', {
+        method: 'POST',
+        body: JSON.stringify(dados),
+      });
+      
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError('Erro de conexão', 500);
+    }
+  },
 };
 
 // Mock para desenvolvimento (quando a API não estiver disponível)
@@ -321,7 +339,7 @@ export const mockApiService = {
       numeroSequencial: `GANHADOR ${String(index + 1).padStart(3, '0')}`,
       qrCodeRef: `QR${index + 1}`,
       pdfUrl: `https://mock.com/bilhete-${index + 1}.pdf`,
-      status: ['GERADO', 'PREMIADO', 'CANCELADO'][index % 3] as any,
+      status: ['GERADO', 'PREMIADO', 'PAGO', 'CANCELADO'][index % 4] as any,
       createdAt: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toISOString(),
       updatedAt: new Date().toISOString(),
       usuarioId: null,
@@ -351,7 +369,7 @@ export const mockApiService = {
       numeroSequencial: `GANHADOR ${String(index + 1).padStart(3, '0')}`,
       qrCodeRef: `QR${index + 1}`,
       pdfUrl: `https://mock.com/bilhete-${index + 1}.pdf`,
-      status: ['GERADO', 'PREMIADO', 'CANCELADO'][index % 3] as any,
+      status: ['GERADO', 'PREMIADO', 'PAGO', 'CANCELADO'][index % 4] as any,
       createdAt: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toISOString(),
       updatedAt: new Date().toISOString(),
       usuarioId: null,
@@ -509,6 +527,40 @@ export const mockApiService = {
     return {
       url: `https://mock.com/bilhete-${bilheteId}.pdf?expires=123456`,
       expiresIn: '24 horas'
+    };
+  },
+
+  async marcarComoPago(dados: MarcarComoPagoRequest): Promise<MarcarComoPagoResponse> {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Simular validações
+    if (!dados.bilheteId) {
+      throw new ApiError('ID do bilhete é obrigatório', 400);
+    }
+    
+    // Simular bilhete não encontrado
+    if (dados.bilheteId.includes('INEXISTENTE')) {
+      throw new ApiError('Bilhete não encontrado', 404);
+    }
+    
+    // Simular bilhete já pago
+    if (dados.bilheteId.includes('JA_PAGO')) {
+      throw new ApiError('Este bilhete já está marcado como pago', 400);
+    }
+    
+    return {
+      sucesso: true,
+      mensagem: 'Bilhete marcado como pago com sucesso!',
+      bilhete: {
+        id: dados.bilheteId,
+        codigoUnico: 'A1B2C3D4E5F',
+        numeroSequencial: 'GANHADOR 001',
+        status: 'PAGO',
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        updatedAt: new Date().toISOString(),
+        usuarioId: null,
+        usuario: null,
+      }
     };
   },
 };

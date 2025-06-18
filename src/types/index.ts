@@ -1,5 +1,5 @@
 // Tipos de Status dos Bilhetes (baseado na API real)
-export type StatusBilhete = 'GERADO' | 'PREMIADO' | 'CANCELADO';
+export type StatusBilhete = 'GERADO' | 'PREMIADO' | 'PAGO' | 'CANCELADO';
 
 // Interface do Bilhete (baseado na API real)
 export interface Bilhete {
@@ -85,6 +85,18 @@ export interface ResgateResponse {
   mensagem: string;
   bilhete: Bilhete;
   dataResgate: string;
+}
+
+// Interface para marcar bilhete como pago
+export interface MarcarComoPagoRequest {
+  bilheteId: string;
+  observacoes?: string;
+}
+
+export interface MarcarComoPagoResponse {
+  sucesso: boolean;
+  mensagem: string;
+  bilhete: Bilhete;
 }
 
 // Interface para filtros de listagem com paginação (API real)

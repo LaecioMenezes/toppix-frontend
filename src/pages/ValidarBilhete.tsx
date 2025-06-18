@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { bilheteService } from '../services/bilheteService';
 import type { ValidarBilheteResponse } from '../types';
 import logoJayna from '../assets/images/logotipo-jayna-icone.png';
@@ -18,7 +17,6 @@ export function ValidarBilhete() {
   const [enviandoContato, setEnviandoContato] = useState(false);
   const [erroFormulario, setErroFormulario] = useState<string | null>(null);
   const [sucessoResgate, setSucessoResgate] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

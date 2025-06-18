@@ -8,7 +8,9 @@ import type {
   ValidarBilheteResponse,
   StorageInfo,
   PdfUrlResponse,
-  ResgateResponse
+  ResgateResponse,
+  MarcarComoPagoRequest,
+  MarcarComoPagoResponse
 } from '../types';
 
 // Usar API real ou mock baseado na variável de ambiente
@@ -113,7 +115,7 @@ export class BilheteService {
    * Busca bilhetes por status com paginação
    */
   async buscarPorStatusPaginado(
-    status: 'GERADO' | 'PREMIADO' | 'CANCELADO',
+    status: 'GERADO' | 'PREMIADO' | 'PAGO' | 'CANCELADO',
     pagina?: number,
     limite?: number
   ): Promise<BilhetesPaginadosResponse> {
@@ -124,7 +126,7 @@ export class BilheteService {
    * Busca bilhetes por status (compatibilidade)
    * @deprecated Use buscarPorStatusPaginado para melhor performance
    */
-  async buscarPorStatus(status: 'GERADO' | 'PREMIADO' | 'CANCELADO'): Promise<Bilhete[]> {
+  async buscarPorStatus(status: 'GERADO' | 'PREMIADO' | 'PAGO' | 'CANCELADO'): Promise<Bilhete[]> {
     return this.listarBilhetes({ status });
   }
 
@@ -184,6 +186,26 @@ export class BilheteService {
         throw new Error(error.message);
       }
       throw new Error('Erro de conexão ao processar resgate');
+    }
+  }
+
+  /**
+   * Marca um bilhete como pago
+   */
+  async marcarComoPago(bilheteId: string, observacoes?: string): Promise<MarcarComoPagoResponse> {
+    try {
+      const dados: MarcarComoPagoRequest = {
+        bilheteId,
+        observacoes: observacoes || 'Pagamento via PIX'
+      };
+      
+      const response = await bilheteApiService.marcarComoPago(dados);
+      return response;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw new Error(error.message);
+      }
+      throw new Error('Erro de conexão ao marcar bilhete como pago');
     }
   }
 
@@ -308,6 +330,7 @@ export class BilheteService {
     total: number;
     gerados: number;
     premiados: number;
+    pagos: number;
     cancelados: number;
   }> {
     try {
@@ -316,9 +339,10 @@ export class BilheteService {
       const total = response.paginacao.totalItens;
       
       // Buscar por status específicos para estatísticas precisas
-      const [gerados, premiados, cancelados] = await Promise.all([
+      const [gerados, premiados, pagos, cancelados] = await Promise.all([
         this.listarBilhetesPaginados({ status: 'GERADO', limite: 1 }),
         this.listarBilhetesPaginados({ status: 'PREMIADO', limite: 1 }),
+        this.listarBilhetesPaginados({ status: 'PAGO', limite: 1 }),
         this.listarBilhetesPaginados({ status: 'CANCELADO', limite: 1 })
       ]);
 
@@ -326,6 +350,7 @@ export class BilheteService {
         total,
         gerados: gerados.paginacao.totalItens,
         premiados: premiados.paginacao.totalItens,
+        pagos: pagos.paginacao.totalItens,
         cancelados: cancelados.paginacao.totalItens
       };
     } catch (error) {
@@ -334,6 +359,7 @@ export class BilheteService {
         total: 0,
         gerados: 0,
         premiados: 0,
+        pagos: 0,
         cancelados: 0
       };
     }
@@ -350,6 +376,8 @@ export class BilheteService {
         return 'bg-blue-100 text-blue-800';
       case 'PREMIADO':
         return 'bg-green-100 text-green-800';
+      case 'PAGO':
+        return 'bg-purple-100 text-purple-800';
       case 'CANCELADO':
         return 'bg-red-100 text-red-800';
       default:
@@ -366,6 +394,8 @@ export class BilheteService {
         return 'Gerado';
       case 'PREMIADO':
         return 'Premiado';
+      case 'PAGO':
+        return 'Pago';
       case 'CANCELADO':
         return 'Cancelado';
       default:
