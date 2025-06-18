@@ -22,6 +22,15 @@ export interface GerarBilhetesRequest {
   dataExpiracao?: Date;
 }
 
+// Interface para parâmetros de geração (usado nos testes)
+export interface ParametrosGeracao {
+  quantidade: number;
+  prefixo: string;
+  percentualPremiados?: number;
+  valorMinimoPremio?: number;
+  valorMaximoPremio?: number;
+}
+
 // Interface para validação de bilhetes
 export interface ValidarBilheteRequest {
   codigo: string;
@@ -42,6 +51,9 @@ export interface FiltrosBilhetes {
   prefixo?: string;
   codigo?: string;
 }
+
+// Alias para compatibilidade com testes antigos
+export type FiltrosBilhete = FiltrosBilhetes;
 
 // Interface para exportação
 export interface ExportarBilhetesRequest {

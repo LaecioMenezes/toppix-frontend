@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Menu, X, Settings, BarChart3, Sparkles, Home } from 'lucide-react';
 import { GerarBilhetes } from './GerarBilhetes';

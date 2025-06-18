@@ -88,7 +88,7 @@ describe('useQRCodeScanner', () => {
 
   it('deve processar resultado do scan corretamente', async () => {
     const onScan = vi.fn();
-    mockHtml5QrCode.start.mockImplementation((camera, config, onSuccess) => {
+    mockHtml5QrCode.start.mockImplementation((_camera, _config, onSuccess) => {
       // Simular um scan bem-sucedido
       setTimeout(() => onSuccess('GANHADOR123', undefined), 100);
       return Promise.resolve();

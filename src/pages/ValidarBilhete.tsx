@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -79,12 +79,6 @@ export function ValidarBilhete() {
     } finally {
       setEnviandoDados(false);
     }
-  };
-
-  const handleQRScan = (codigo: string) => {
-    setValue('codigo', codigo);
-    setMostrarQRScanner(false);
-    handleSubmit(onSubmit)();
   };
 
   const handleNovaValidacao = () => {
