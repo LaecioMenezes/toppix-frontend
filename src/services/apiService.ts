@@ -19,9 +19,9 @@ import type {
 } from '../types';
 
 // Configuração da API
-const API_BASE_URL = import.meta.env.VITE_API_URL || (
-  import.meta.env.DEV ? '/api' : 'http://localhost:3000'
-);
+const API_BASE_URL = import.meta.env.VITE_API_URL ? 
+  import.meta.env.VITE_API_URL.replace(/\/$/, '') : // Remove trailing slash se existir
+  (import.meta.env.DEV ? '/api' : 'http://localhost:3000');
 
 // Classe para lidar com erros da API
 class ApiError extends Error {
@@ -66,7 +66,17 @@ async function apiRequest<T>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  // Garantir que o endpoint comece com /
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE_URL}${normalizedEndpoint}`;
+  
+  // Debug logs para produção
+  console.log('🔧 API Configuration:', {
+    VITE_API_URL: import.meta.env.VITE_API_URL,
+    API_BASE_URL,
+    endpoint: normalizedEndpoint,
+    finalUrl: url
+  });
   
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
