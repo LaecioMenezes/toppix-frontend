@@ -70,7 +70,23 @@ VITE_API_URL=http://localhost:3000
 Configure a variável de ambiente na plataforma:
 
 - **Nome**: `VITE_API_URL`
-- **Valor**: `https://sua-api-backend.com`
+- **Valor**: `promo.zynko.io` (sem https://, será adicionado automaticamente)
+
+**OU** com protocolo completo:
+
+- **Nome**: `VITE_API_URL`
+- **Valor**: `https://promo.zynko.io`
+
+### Configurações Específicas da Vercel
+
+1. Acesse o dashboard da Vercel
+2. Vá em **Settings** > **Environment Variables**
+3. Adicione:
+   - **Name**: `VITE_API_URL`
+   - **Value**: `promo.zynko.io`
+   - **Environments**: Production, Preview, Development
+
+4. **Redeploy** o projeto após adicionar a variável
 
 ## Verificação
 
@@ -86,9 +102,9 @@ Configure a variável de ambiente na plataforma:
 ```
 
 2. **URLs corretas esperadas:**
-   - ✅ `https://sua-api-backend.com/auth/login`
-   - ✅ `https://sua-api-backend.com/bilhetes/gerar-lote`
-   - ❌ `https://toppix.jaynaalimentos.com.br/promo.zynko.io/auth/login` (incorreto)
+   - ✅ `https://promo.zynko.io/auth/login`
+   - ✅ `https://promo.zynko.io/bilhetes/gerar-lote`
+   - ❌ `https://toppix.jaynaalimentos.com.br/promo.zynko.io/auth/login` (incorreto - concatenação indevida)
 
 ## Importante
 

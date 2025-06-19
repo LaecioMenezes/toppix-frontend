@@ -19,9 +19,23 @@ import type {
 } from '../types';
 
 // Configuração da API
-const API_BASE_URL = import.meta.env.VITE_API_URL ? 
-  import.meta.env.VITE_API_URL.replace(/\/$/, '') : // Remove trailing slash se existir
-  (import.meta.env.DEV ? '/api' : 'http://localhost:3000');
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  
+  if (envUrl) {
+    // Se a URL não começar com http:// ou https://, adicionar https://
+    if (!envUrl.startsWith('http://') && !envUrl.startsWith('https://')) {
+      return `https://${envUrl}`.replace(/\/$/, '');
+    }
+    // Se já tiver protocolo, apenas remover trailing slash
+    return envUrl.replace(/\/$/, '');
+  }
+  
+  // Fallback para desenvolvimento
+  return import.meta.env.DEV ? '/api' : 'http://localhost:3000';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Classe para lidar com erros da API
 class ApiError extends Error {
@@ -72,10 +86,12 @@ async function apiRequest<T>(
   
   // Debug logs para produção
   console.log('🔧 API Configuration:', {
-    VITE_API_URL: import.meta.env.VITE_API_URL,
-    API_BASE_URL,
-    endpoint: normalizedEndpoint,
-    finalUrl: url
+    'Raw VITE_API_URL': import.meta.env.VITE_API_URL,
+    'Processed API_BASE_URL': API_BASE_URL,
+    'Current window.location.origin': window.location.origin,
+    'Endpoint': normalizedEndpoint,
+    'Final URL': url,
+    'Is absolute URL': url.startsWith('http')
   });
   
   const defaultHeaders: Record<string, string> = {
